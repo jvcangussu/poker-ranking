@@ -1,36 +1,97 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Poker Ranking
 
-## Getting Started
+Um sistema web simples para organizar grupos de poker entre amigos, registrar partidas, acompanhar lucro/prejuízo e manter um ranking atualizado dos jogadores.
 
-First, run the development server:
+## Sobre o projeto
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+O **Poker Ranking** foi criado para resolver um problema bem específico de uso pessoal: acompanhar, de forma mais prática e visual, o saldo acumulado dos jogadores de um grupo de poker ao longo das partidas.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+A ideia é substituir controles manuais em papel, mensagens ou planilhas por uma interface web simples, bonita e fácil de usar.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Objetivo
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Permitir que um grupo de amigos possa:
 
-## Learn More
+- criar um grupo privado
+- entrar em uma partida
+- registrar buy-in e cash-out
+- acompanhar lucro e prejuízo de cada jogador
+- visualizar o ranking geral do grupo
+- consultar histórico de partidas
+- administrar jogadores e configurações do grupo
 
-To learn more about Next.js, take a look at the following resources:
+## Stack utilizada
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Front-end
+- [Next.js](https://nextjs.org/)
+- [React](https://react.dev/)
+- [TypeScript](https://www.typescriptlang.org/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [shadcn/ui](https://ui.shadcn.com/)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Back-end / Infra
+- [Supabase](https://supabase.com/)
+  - PostgreSQL
+  - RPCs
+  - Views
+  - Storage
 
-## Deploy on Vercel
+## Estrutura geral
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+O projeto usa:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Next.js App Router** no front-end
+- **Supabase** como backend
+- **código curto de grupo** para acesso
+- **sessão simples em localStorage**
+- **fluxo leve**, voltado para uso privado
+
+## Observação importante sobre segurança
+
+Este projeto foi feito **para uso pessoal e entre amigos**, com foco em praticidade e diversão.
+
+Ele **não foi desenvolvido com medidas de segurança rígidas como prioridade**. Algumas decisões foram tomadas para simplificar o desenvolvimento e facilitar o uso entre pessoas de confiança.
+
+### Em outras palavras:
+- este **não é** um sistema pronto para produção pública
+- **não é recomendado** para uso comercial
+- **não é recomendado** para uso com usuários desconhecidos
+- **não segue todas as boas práticas de segurança de forma rigorosa**
+
+A proposta aqui foi construir algo funcional e divertido para um grupo privado, e não um produto enterprise ou uma plataforma pública.
+
+## Projeto vibecodado
+
+Sim: este projeto foi fortemente **vibecodado**.
+
+Isso significa que ele nasceu com uma abordagem mais experimental, rápida e iterativa, priorizando:
+- ideia
+- fluxo
+- experiência
+- diversão
+- validação entre amigos
+
+em vez de seguir, desde o começo, um processo rígido de engenharia de software voltado para alta robustez, escalabilidade ou segurança formal.
+
+## Limitações atuais
+
+Alguns pontos que ainda podem ser melhorados no futuro:
+
+- controle de permissão mais robusto no backend
+- sessão mais segura do lado do servidor
+- proteção mais forte contra manipulação de dados no front
+- regras administrativas validadas também no banco
+- refinamentos de UX
+- tratamento de erros mais refinado
+- testes automatizados
+
+## Possíveis evoluções futuras
+
+- autenticação real por usuário
+- permissões mais seguras com RLS mais refinado
+- upload mais avançado de mídia
+- página individual de jogador
+- gráficos históricos
+- relatórios/exportação
+- melhorias visuais e responsivas
+- auditoria de alterações
