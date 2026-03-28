@@ -12,7 +12,6 @@ export type StatsStripTone =
   | "primary"
   | "danger"
   | "highlight"
-  /** Filtros da lista de partidas — uma cor por status */
   | "stripTotal"
   | "stripOpen"
   | "stripReview"
@@ -41,7 +40,6 @@ const toneClass: Record<StatsStripTone, string> = {
     "border-violet-400/45 bg-violet-600/25 text-violet-100 ring-violet-400/25",
 };
 
-/** Borda/fundo do botão quando o filtro está ativo (alinha à cor do ícone). */
 const filterActiveShellClass: Partial<Record<StatsStripTone, string>> = {
   stripTotal:
     "border-amber-400/55 bg-amber-500/15 shadow-amber-500/10 ring-amber-400/45 lg:border-amber-400/50 lg:bg-amber-500/12",
@@ -63,20 +61,16 @@ export type StatsStripItem = {
   icon: LucideIcon;
   tone?: StatsStripTone;
   children: ReactNode;
-  /** Quando definido, a célula vira botão (ex.: filtro). */
   onClick?: () => void;
-  /** Destaque visual quando o filtro/estado está ativo. */
   isActive?: boolean;
 };
 
-/** Tailwind precisa das classes completas no fonte (nada de `grid-cols-${n}` dinâmico). */
 const stripGridCols: Record<number, string> = {
   1: "grid-cols-1",
   2: "grid-cols-2",
   3: "grid-cols-3",
   4: "grid-cols-4",
   5: "grid-cols-5",
-  /** Mobile: 2×3; tablet: 3×2; desktop: uma linha (evita células minúsculas). */
   6: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6",
 };
 
@@ -134,7 +128,6 @@ export function StatsStrip({ items }: { items: StatsStripItem[] }) {
               "rounded-xl border border-border/50 bg-background/20 lg:rounded-none lg:border-0 lg:bg-transparent"
           );
 
-          /** Botões de filtro: cantos arredondados também no desktop (evita anel quadrado). */
           const interactiveCellClass = cn(
             "flex min-w-0 flex-col items-center justify-center gap-1 px-0.5 py-1.5 sm:px-1 sm:py-2",
             "w-full cursor-pointer text-inherit transition",

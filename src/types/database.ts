@@ -62,7 +62,6 @@ export type GroupRankingRow = {
   avg_profit: number;
   best_result: number;
   worst_result: number;
-  /** Preenchido no cliente a partir de `players.photo_url` quando disponível */
   photo_url?: string | null;
 };
 

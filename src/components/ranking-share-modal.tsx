@@ -108,7 +108,6 @@ type RankingShareModalProps = {
   highlightPlayerId: string;
   ranking: GroupRankingRow[];
   movements: Map<string, RankMovementDisplay>;
-  /** Quando definido, a coluna de variação é explicada no rodapé do cartão. */
   lastClosedMatchPlayedAt: string | null;
 };
 

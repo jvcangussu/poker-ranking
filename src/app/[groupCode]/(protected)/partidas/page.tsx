@@ -104,15 +104,41 @@ export default function PartidasPage() {
         setLoading(true);
         setError(null);
 
-        const { data, error } = await supabase
-          .from("v_match_summary")
-          .select("*")
-          .eq("group_id", session.groupId)
-          .order("played_at", { ascending: false });
+        const [
+          { data, error },
+          { data: playersPhotoData, error: playersPhotoError },
+        ] = await Promise.all([
+          supabase
+            .from("v_match_summary")
+            .select("*")
+            .eq("group_id", session.groupId)
+            .order("played_at", { ascending: false }),
+          supabase
+            .from("players")
+            .select("id, photo_url")
+            .eq("group_id", session.groupId),
+        ]);
 
         if (error) throw error;
+        if (playersPhotoError) throw playersPhotoError;
 
-        setMatches((data ?? []) as MatchSummaryRow[]);
+        const photoByPlayer = new Map(
+          (playersPhotoData ?? []).map((p) => [
+            p.id,
+            (p.photo_url as string | null)?.trim() || null,
+          ])
+        );
+
+        setMatches(
+          (data ?? []).map((row) => {
+            const m = row as MatchSummaryRow;
+            const merged =
+              m.created_by_photo_url?.trim() ||
+              photoByPlayer.get(m.created_by_player_id) ||
+              null;
+            return { ...m, created_by_photo_url: merged };
+          })
+        );
       } catch (err) {
         setError(err instanceof Error ? err.message : "Erro ao carregar partidas.");
       } finally {
@@ -282,11 +308,6 @@ export default function PartidasPage() {
         <CardHeader className="flex flex-row items-center justify-between gap-4">
           <div>
             <CardTitle className="font-heading text-2xl">Partidas</CardTitle>
-            {session?.isAdmin ? (
-              <p className="mt-1 text-sm text-muted-foreground">
-                Como admin, você pode excluir uma partida na lista abaixo (botão ao lado de «Ver detalhes»).
-              </p>
-            ) : null}
           </div>
 
           <Button asChild className="rounded-full">

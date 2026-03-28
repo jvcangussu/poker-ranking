@@ -59,10 +59,6 @@ type PokerChipFaceProps = {
   className?: string;
 };
 
-/**
- * Face da ficha: tenta `/public/chips/{denom}.png`, depois `.webp`, senão CSS.
- * Coloque imagens exportadas no projeto em `public/chips/` com esses nomes.
- */
 export function PokerChipFace({
   denomination,
   size = "md",

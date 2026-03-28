@@ -24,18 +24,13 @@ function formatCurrency(value: number) {
 type ChipCashoutModalProps = {
   open: boolean;
   playerName: string;
-  /** Total em R$ já conhecido (ex.: do banco). */
   initialCashOutMoney: number;
-  /**
-   * Combinação exata salva no banco; se existir, o modal não recalcula com algoritmo guloso.
-   */
   initialChipCounts: Record<ChipDenomination, number> | null;
   onClose: () => void;
   onApply: (
     cashOutMoney: number,
     counts: Record<ChipDenomination, number>
   ) => Promise<void>;
-  /** Partida fechada: só exibe a combinação final, sem editar. */
   readOnly?: boolean;
 };
 
@@ -191,7 +186,6 @@ export function ChipCashoutModal({
                       await onApply(totalMoney, counts);
                       onClose();
                     } catch {
-                      /* erro exibido na página da partida */
                     } finally {
                       setApplying(false);
                     }
