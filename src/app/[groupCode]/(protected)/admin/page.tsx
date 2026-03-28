@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { supabase } from "@/lib/supabase/client";
+import { ConfirmDeleteMatchModal } from "@/components/confirm-delete-match-modal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -70,6 +71,7 @@ export default function AdminPage() {
   const [deletingPlayerId, setDeletingPlayerId] = useState<string | null>(null);
   const [togglingAdminPlayerId, setTogglingAdminPlayerId] = useState<string | null>(null);
   const [deletingMatchId, setDeletingMatchId] = useState<string | null>(null);
+  const [matchPendingDelete, setMatchPendingDelete] = useState<MatchSummaryRow | null>(null);
 
   const [groupName, setGroupName] = useState("");
   const [savingGroupName, setSavingGroupName] = useState(false);
@@ -281,15 +283,13 @@ export default function AdminPage() {
     }
   }
 
-  async function handleDeleteMatch(matchId: string) {
-    const confirmed = window.confirm(
-      "Excluir esta partida permanentemente? Todas as entradas, compras e resultados dela serão apagados. O ranking e os saldos dos jogadores passam a considerar apenas as partidas que restarem. Esta ação não pode ser desfeita."
-    );
-
-    if (!confirmed) return;
+  async function confirmDeleteMatch() {
+    const matchId = matchPendingDelete?.match_id;
+    if (!matchId) return;
 
     if (!session?.playerId) {
       setFeedback("Sessão inválida; entre de novo no grupo.");
+      setMatchPendingDelete(null);
       return;
     }
 
@@ -305,6 +305,7 @@ export default function AdminPage() {
       if (error) throw error;
 
       setMatches((prev) => prev.filter((match) => match.match_id !== matchId));
+      setMatchPendingDelete(null);
       setFeedback(
         "Partida excluída. Ranking e totais dos jogadores foram atualizados automaticamente."
       );
@@ -423,6 +424,20 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-6">
+      <ConfirmDeleteMatchModal
+        open={matchPendingDelete !== null}
+        matchTitle={matchPendingDelete?.notes?.trim() || "Partida sem observação"}
+        playedAtLabel={
+          matchPendingDelete ? formatDate(matchPendingDelete.played_at) : ""
+        }
+        createdByLabel={matchPendingDelete?.created_by_player_name}
+        onClose={() => setMatchPendingDelete(null)}
+        onConfirm={() => void confirmDeleteMatch()}
+        confirming={Boolean(
+          matchPendingDelete && deletingMatchId === matchPendingDelete.match_id
+        )}
+      />
+
       <div>
         <h1 className="font-heading text-3xl font-semibold tracking-tight">
           Administração
@@ -834,8 +849,11 @@ export default function AdminPage() {
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => handleDeleteMatch(match.match_id)}
-                        disabled={deletingMatchId === match.match_id}
+                        onClick={() => setMatchPendingDelete(match)}
+                        disabled={
+                          deletingMatchId === match.match_id ||
+                          matchPendingDelete?.match_id === match.match_id
+                        }
                         className="rounded-full"
                       >
                         {deletingMatchId === match.match_id ? (
