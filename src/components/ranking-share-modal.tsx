@@ -618,7 +618,7 @@ export function RankingShareModal({
         </div>
 
         <p className="mt-4 max-w-md text-center text-xs text-zinc-500">
-          Se alguma foto não aparecer no PNG, o app usa as iniciais (rede pode bloquear CORS).
+          Se alguma foto não aparecer no PNG, o app usa as iniciais (foto fora do Supabase ou rede).
         </p>
       </div>
 

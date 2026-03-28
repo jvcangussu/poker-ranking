@@ -12,8 +12,7 @@ function isAllowedImageHost(hostname: string): boolean {
 }
 
 /**
- * Proxy same-origin para fotos em storage (ex.: Supabase), para o PNG do Story
- * não depender de CORS no canvas / html-to-image no Safari.
+ * Proxy para fotos em storage (ex.: Supabase), usado na captura do PNG (Safari / modern-screenshot).
  */
 export async function GET(req: NextRequest) {
   const raw = req.nextUrl.searchParams.get("url");

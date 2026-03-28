@@ -1,3 +1,11 @@
+function isDataUrl(src: string): boolean {
+  return src.startsWith("data:");
+}
+
+function proxyUrlForRemoteImage(absoluteUrl: string): string {
+  return `/api/share-proxy-image?url=${encodeURIComponent(absoluteUrl)}`;
+}
+
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -7,24 +15,49 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-function isDataUrl(src: string): boolean {
-  return src.startsWith("data:");
-}
+/** Usado pelo modern-screenshot `fetchFn` quando o clone ainda tem URLs http(s). */
+export async function fetchShareResourceAsDataUrl(
+  resourceUrl: string
+): Promise<string | false> {
+  const trimmed = resourceUrl.trim();
+  if (!trimmed || isDataUrl(trimmed)) return trimmed || false;
 
-function proxyUrlForRemoteImage(absoluteUrl: string): string {
-  return `/api/share-proxy-image?url=${encodeURIComponent(absoluteUrl)}`;
+  if (trimmed.startsWith("blob:")) {
+    try {
+      const res = await fetch(trimmed);
+      if (!res.ok) return false;
+      return await blobToDataUrl(await res.blob());
+    } catch {
+      return false;
+    }
+  }
+
+  try {
+    const absolute = new URL(trimmed, window.location.href).href;
+    const origin = window.location.origin;
+    const fetchUrl = absolute.startsWith(origin)
+      ? absolute
+      : proxyUrlForRemoteImage(absolute);
+
+    const res = await fetch(fetchUrl);
+    if (!res.ok) return false;
+    const blob = await res.blob();
+    return await blobToDataUrl(blob);
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Troca temporariamente `src` de cada <img> por data URL, para o html-to-image
- * não falhar com CORS no Safari (fundo + avatares).
- * Chame o retorno após `toPng` para restaurar o DOM.
+ * Troca temporariamente `src` de cada <img> por blob URL (mais leve que data URL
+ * gigante no SVG do WebKit). Chame o retorno após a captura.
  */
 export async function inlineImagesForShareCapture(
   root: HTMLElement
 ): Promise<() => void> {
   const imgs = Array.from(root.querySelectorAll("img"));
-  const restores: { el: HTMLImageElement; src: string }[] = [];
+  const restores: { el: HTMLImageElement; src: string; objectUrl: string }[] =
+    [];
 
   for (const img of imgs) {
     const raw = img.getAttribute("src")?.trim() ?? "";
@@ -47,17 +80,18 @@ export async function inlineImagesForShareCapture(
       if (!res.ok) continue;
 
       const blob = await res.blob();
-      const dataUrl = await blobToDataUrl(blob);
-      restores.push({ el: img, src: img.src });
-      img.src = dataUrl;
+      const objectUrl = URL.createObjectURL(blob);
+      restores.push({ el: img, src: img.src, objectUrl });
+      img.src = objectUrl;
       await img.decode().catch(() => undefined);
     } catch {
-      /* mantém src; captura pode cair no fallback de iniciais */
+      /* mantém src original */
     }
   }
 
   return () => {
-    for (const { el, src } of restores) {
+    for (const { el, src, objectUrl } of restores) {
+      URL.revokeObjectURL(objectUrl);
       el.src = src;
     }
   };

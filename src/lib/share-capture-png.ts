@@ -1,6 +1,9 @@
-import { toPng } from "html-to-image";
+import { domToPng } from "modern-screenshot";
 
-import { inlineImagesForShareCapture } from "@/lib/share-capture-inline-images";
+import {
+  fetchShareResourceAsDataUrl,
+  inlineImagesForShareCapture,
+} from "@/lib/share-capture-inline-images";
 
 type CaptureSharePngOpts = {
   width: number;
@@ -9,21 +12,39 @@ type CaptureSharePngOpts = {
   backgroundColor: string;
 };
 
+/**
+ * modern-screenshot corrige o bug do WebKit ao decodificar svg+xml antes do
+ * drawImage (Safari iOS); html-to-image não aplica esse workaround.
+ */
 export async function captureShareCardToPng(
   node: HTMLElement,
   opts: CaptureSharePngOpts
 ): Promise<string> {
   const restore = await inlineImagesForShareCapture(node);
   try {
-    return await toPng(node, {
+    if (typeof document !== "undefined" && document.fonts?.ready) {
+      await document.fonts.ready.catch(() => undefined);
+    }
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+
+    return await domToPng(node, {
       width: opts.width,
       height: opts.height,
-      pixelRatio: opts.pixelRatio ?? 1,
-      cacheBust: false,
+      scale: opts.pixelRatio ?? 1,
       backgroundColor: opts.backgroundColor,
-      style: {
-        transform: "none",
+      style: { transform: "none" },
+      timeout: 120_000,
+      drawImageInterval: 120,
+      features: {
+        fixSvgXmlDecode: true,
+        removeAbnormalAttributes: true,
+        removeControlCharacter: true,
       },
+      fetchFn: (url) => fetchShareResourceAsDataUrl(url),
     });
   } finally {
     restore();
