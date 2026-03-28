@@ -581,10 +581,6 @@ export function MatchResultShareModal({
             </div>
           </div>
         </div>
-
-        <p className="mt-4 max-w-md text-center text-xs text-zinc-500">
-          Se alguma foto não aparecer no PNG, o app usa as iniciais (rede pode bloquear CORS).
-        </p>
       </div>
 
       <footer className="shrink-0 border-t border-white/10 bg-zinc-950/80 px-4 py-4 sm:px-6">
