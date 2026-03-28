@@ -317,11 +317,6 @@ export default function PartidasPage() {
         <CardHeader className="flex flex-row items-center justify-between gap-4">
           <div>
             <CardTitle className="font-heading text-2xl">Partidas</CardTitle>
-            {session?.isAdmin ? (
-              <p className="mt-1 text-sm text-muted-foreground">
-                Como admin, você pode excluir uma partida na lista abaixo (botão ao lado de «Ver detalhes»).
-              </p>
-            ) : null}
           </div>
 
           <Button asChild className="rounded-full">
