@@ -19,12 +19,10 @@ import type { MatchSummaryRow } from "@/types/database";
 import type { ParticipantEntry } from "@/types/ui";
 
 const EXPORT_W = 1080;
-/** 9:16 — mesmo formato do Instagram Stories (1080×1920). 4:5 era cortado ao abrir como Story. */
 const EXPORT_H = 1920;
 
 const APP_MARK = "Poker Ranking";
 
-/** Arte de fundo (feed / stories). */
 const INSTA_BG = "/insta_background.png";
 
 const FALLBACK_BG = "#0a1628";
@@ -35,7 +33,6 @@ function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   return fetch(dataUrl).then((r) => r.blob());
 }
 
-/** Web Share com arquivo só funciona em contexto seguro (https, localhost). IP http na LAN costuma cair no fallback. */
 function isSecureShareContext(): boolean {
   if (typeof window === "undefined") return false;
   return window.isSecureContext === true;
@@ -186,7 +183,6 @@ export function MatchResultShareModal({
   const captureRankingPng = useCallback(async (): Promise<string> => {
     const node = cardRef.current;
     if (!node) throw new Error("Card indisponível");
-    // Preview usa scale() no próprio card; sem isso o PNG sai pequeno no canto (canvas cheio de fundo).
     return toPng(node, {
       width: EXPORT_W,
       height: EXPORT_H,
@@ -209,10 +205,6 @@ export function MatchResultShareModal({
     []
   );
 
-  /**
-   * Menu nativo Compartilhar → Instagram. Não confiar em `canShare` no iOS (muitas vezes false com `share()` ok).
-   * Compartilhar arquivo exige contexto seguro; http://192.168.x.x na LAN não é — só download + galeria.
-   */
   const handlePostInstagram = useCallback(async () => {
     setShareHint(null);
     setExporting(true);
@@ -327,7 +319,6 @@ export function MatchResultShareModal({
               transformOrigin: "top left",
             }}
           >
-            {/* Fundo: arte + zoom (aproxima mesa/pódio) + vinheta para leitura */}
             <div className="absolute inset-0 overflow-hidden">
               {/* eslint-disable-next-line @next/next/no-img-element -- asset local public/ */}
               <img

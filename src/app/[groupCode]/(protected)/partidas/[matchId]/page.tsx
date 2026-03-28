@@ -13,6 +13,7 @@ import {
   Copy,
   Flag,
   FolderOpen,
+  Gauge,
   Info,
   KeyRound,
   Loader2,
@@ -84,7 +85,6 @@ function entryCashOutValue(entry: ParticipantEntry): number {
   return toNumber(entry.cashOut);
 }
 
-/** PIX exibido no modal: para o criador da partida usa o PIX da sala (`host_pix_key`), senão o do perfil. */
 function buildPlayerPixModalPayload(
   entry: ParticipantEntry,
   match: MatchSummaryRow
@@ -196,6 +196,8 @@ export default function MatchDetailsPage() {
   const [removingParticipantId, setRemovingParticipantId] = useState<string | null>(
     null
   );
+
+  const [creatorPhotoUrl, setCreatorPhotoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem("poker-session");
@@ -325,6 +327,11 @@ export default function MatchDetailsPage() {
 
     const participantIds = new Set(detailedEntries.map((entry) => entry.player_id));
     const notInMatch = players.filter((player) => !participantIds.has(player.id));
+
+    const md = matchData as MatchSummaryRow;
+    const creatorFromView = md.created_by_photo_url?.trim();
+    const creatorFromPlayers = photoByPlayerId.get(md.created_by_player_id) ?? null;
+    setCreatorPhotoUrl(creatorFromView || creatorFromPlayers || null);
 
     setMatch(matchData as MatchSummaryRow);
     setEntries(participantEntries);
@@ -797,7 +804,6 @@ export default function MatchDetailsPage() {
     session && match && session.playerId === match.created_by_player_id
   );
 
-  /** Ordem da lista: o próprio jogador sempre no topo (cada usuário vê sua linha primeiro). */
   const entriesWithViewerFirst = useMemo(() => {
     const pid = session?.playerId;
     if (!pid || entries.length === 0) return entries;
@@ -807,6 +813,14 @@ export default function MatchDetailsPage() {
     const [self] = next.splice(idx, 1);
     return [self, ...next];
   }, [entries, session?.playerId]);
+
+  const creatorDisplayPhoto = useMemo(() => {
+    if (!match) return creatorPhotoUrl;
+    const fromEntry = entries.find(
+      (e) => e.playerId === match.created_by_player_id
+    );
+    return fromEntry?.photoUrl ?? creatorPhotoUrl;
+  }, [match, entries, creatorPhotoUrl]);
 
   const allEntriesSubmitted =
     entries.length > 0 && entries.every((e) => e.submittedForReview);
@@ -857,7 +871,7 @@ export default function MatchDetailsPage() {
       </div>
 
       <Card className="rounded-2xl border-border/70 bg-card/60 py-1 shadow-lg shadow-black/5 sm:rounded-[1.75rem]">
-        <CardContent className="grid grid-cols-4 gap-0 divide-x divide-border/60 px-1 py-2 sm:px-2 sm:py-3">
+        <CardContent className="grid grid-cols-2 gap-2 border-border/60 px-1 py-2 sm:px-2 sm:py-3 lg:grid-cols-5 lg:gap-0 lg:divide-x lg:divide-border/60">
           <div
             className="flex min-w-0 flex-col items-center justify-center gap-1 px-1 py-2"
             title="Status da partida"
@@ -921,6 +935,28 @@ export default function MatchDetailsPage() {
               {formatCurrency(totalCashOut)}
             </p>
           </div>
+
+          <div
+            className="col-span-2 flex min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 lg:col-span-1"
+            title="Buy-in máximo por compra"
+            aria-label={
+              match?.max_buy_in != null && Number(match.max_buy_in) > 0
+                ? `Buy-in máximo por compra: ${formatCurrency(Number(match.max_buy_in))}`
+                : "Buy-in máximo: sem limite definido"
+            }
+          >
+            <div className="flex size-9 items-center justify-center rounded-xl border border-border/60 bg-muted/30 text-muted-foreground sm:size-10">
+              <Gauge className="size-[1.1rem] sm:size-5" aria-hidden />
+            </div>
+            <p className="max-w-full text-center font-heading text-[0.58rem] font-medium leading-tight text-muted-foreground sm:text-[0.62rem]">
+              Máx. / compra
+            </p>
+            <p className="max-w-full text-center font-heading text-[0.65rem] font-bold leading-tight text-foreground sm:text-xs">
+              {match?.max_buy_in != null && Number(match.max_buy_in) > 0
+                ? formatCurrency(Number(match.max_buy_in))
+                : "Sem limite"}
+            </p>
+          </div>
         </CardContent>
       </Card>
 
@@ -928,7 +964,6 @@ export default function MatchDetailsPage() {
         <>
           {match?.host_pix_key?.trim() ? (
             <>
-              {/* Mobile: sem card — só rótulo + faixa */}
               <div className="space-y-1.5 sm:hidden">
                 <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                   PIX do organizador
@@ -1779,9 +1814,16 @@ export default function MatchDetailsPage() {
 
                 <div className="rounded-2xl border border-border/70 bg-background/30 p-4">
                   <p className="text-sm text-muted-foreground">Criada por</p>
-                  <p className="mt-1 font-heading text-xl font-semibold">
-                    {match?.created_by_player_name ?? "-"}
-                  </p>
+                  <div className="mt-2 flex min-w-0 items-center gap-3">
+                    <PlayerAvatar
+                      name={match?.created_by_player_name ?? "?"}
+                      photoUrl={creatorDisplayPhoto}
+                      size="md"
+                    />
+                    <p className="min-w-0 flex-1 font-heading text-xl font-semibold leading-snug">
+                      {match?.created_by_player_name ?? "-"}
+                    </p>
+                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-border/70 bg-background/30 p-4">

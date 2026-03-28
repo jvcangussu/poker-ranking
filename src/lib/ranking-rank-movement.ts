@@ -5,10 +5,6 @@ export type RankMovementDisplay =
   | { kind: "debut" }
   | { kind: "none" };
 
-/**
- * Compara a posição atual com o ranking «acumulado antes da última partida encerrada»:
- * para cada jogador, subtrai o lucro dessa partida do saldo total e reordena.
- */
 export function computeRankMovements(
   ranking: GroupRankingRow[],
   lastMatchProfitByPlayer: Map<string, number> | null

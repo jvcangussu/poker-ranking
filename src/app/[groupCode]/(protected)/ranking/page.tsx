@@ -42,7 +42,6 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-/** Quantidade exibida no card «Últimas partidas» (alinhado à query Supabase). */
 const RANKING_RECENT_MATCHES_LIMIT = 5;
 
 export default function RankingPage() {
@@ -140,7 +139,16 @@ export default function RankingPage() {
             photo_url: photoByPlayer.get((row as GroupRankingRow).player_id) ?? null,
           }))
         );
-        setRecentMatches((matchData ?? []) as MatchSummaryRow[]);
+        setRecentMatches(
+          (matchData ?? []).map((row) => {
+            const m = row as MatchSummaryRow;
+            const merged =
+              m.created_by_photo_url?.trim() ||
+              photoByPlayer.get(m.created_by_player_id) ||
+              null;
+            return { ...m, created_by_photo_url: merged };
+          })
+        );
 
         const { data: lastClosedRow } = await supabase
           .from("v_match_summary")
@@ -359,7 +367,6 @@ export default function RankingPage() {
               </div>
             ) : (
               <>
-                {/* Mobile: cartões empilhados (evita colunas quebradas) */}
                 <div className="space-y-3 md:hidden">
                   {ranking.map((player, index) => (
                     <div
@@ -405,7 +412,6 @@ export default function RankingPage() {
                   ))}
                 </div>
 
-                {/* Desktop: tabela */}
                 <div className="hidden overflow-hidden rounded-3xl border border-border/70 md:block">
                   <div className="grid grid-cols-[minmax(4rem,5rem)_minmax(0,1.5fr)_minmax(0,1fr)_minmax(5rem,6rem)] gap-x-3 border-b border-border/70 bg-background/30 px-4 py-3 text-xs uppercase tracking-[0.14em] text-muted-foreground">
                     <span>Pos.</span>

@@ -1,4 +1,3 @@
-/** Valores de face das fichas (unidades inteiras). O valor em dinheiro é (quantidade × face) / 100. */
 export const CHIP_DENOMINATIONS = [
   5, 10, 25, 50, 100, 500, 1000, 5000,
 ] as const;
@@ -22,7 +21,6 @@ export function emptyChipCounts(): Record<ChipDenomination, number> {
   ) as Record<ChipDenomination, number>;
 }
 
-/** Serializa contagens para JSON no banco (só faces com quantidade > 0). */
 export function chipCountsToJsonObject(
   counts: Record<ChipDenomination, number>
 ): Record<string, number> {
@@ -34,7 +32,6 @@ export function chipCountsToJsonObject(
   return o;
 }
 
-/** Lê o JSON salvo no banco de volta para o mapa de faces. */
 export function chipCountsFromJson(
   json: unknown
 ): Record<ChipDenomination, number> | null {
@@ -60,9 +57,6 @@ export function chipCountsFromJson(
   return has ? out : null;
 }
 
-/**
- * Ao reabrir o modal: usa as fichas salvas no banco; senão reconstrói a partir do valor (legado).
- */
 export function resolveInitialChipCounts(
   saved: Record<ChipDenomination, number> | null | undefined,
   cashOutMoney: number
@@ -84,12 +78,6 @@ export function resolveInitialChipCounts(
   return emptyChipCounts();
 }
 
-/**
- * Reconstrói uma contagem de fichas cujo total em dinheiro coincide com `money`
- * (em R$), usando algoritmo guloso do maior para o menor valor de face.
- * Valores que não são múltiplos de 5 centavos são arredondados para o múltiplo
- * de 5 centavos mais próximo antes da decomposição.
- */
 export function moneyToChipCounts(money: number): Record<ChipDenomination, number> {
   const counts = emptyChipCounts();
   let cents = Math.round(Number(money) * 100);
@@ -97,7 +85,6 @@ export function moneyToChipCounts(money: number): Record<ChipDenomination, numbe
     return counts;
   }
 
-  // Faces são múltiplas de 5 centavos; ajusta para o múltiplo de 5 imediatamente inferior.
   cents -= cents % 5;
 
   const denomsDesc = [...CHIP_DENOMINATIONS].sort((a, b) => b - a);

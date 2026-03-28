@@ -1,4 +1,3 @@
-/** Status persistido em `matches.status` (Postgres). */
 export type MatchStatus =
   | "open"
   | "in_review"
@@ -24,10 +23,6 @@ export function isMatchStatus(value: string | null | undefined): value is MatchS
   );
 }
 
-/**
- * Espelha `match_allows_financial_edit` no Postgres: aberta/em análise,
- * ou em ajuste com desbloqueio individual para aquele jogador.
- */
 export function matchAllowsPlayerFinancialEdit(
   status: MatchStatus,
   adjustmentResubmitUnlocked: boolean
@@ -39,7 +34,6 @@ export function matchAllowsPlayerFinancialEdit(
   );
 }
 
-/** Rótulo seguro para qualquer string vinda do banco. */
 export function labelMatchStatus(status: string | null | undefined): string {
   if (status && isMatchStatus(status)) return MATCH_STATUS_LABEL[status];
   return status?.trim() ? status : "—";
