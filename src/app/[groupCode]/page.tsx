@@ -25,6 +25,7 @@ export default function GroupAccessPage() {
   const [players, setPlayers] = useState<PlayerBasic[]>([]);
   const [selectedPlayerName, setSelectedPlayerName] = useState("");
   const [groupPassword, setGroupPassword] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
 
   const [initialLoading, setInitialLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -98,6 +99,12 @@ export default function GroupAccessPage() {
     loadGroupData();
   }, [groupCode]);
 
+  const selectedPlayer = useMemo(
+    () => players.find((p) => p.name === selectedPlayerName),
+    [players, selectedPlayerName]
+  );
+  const needsAdminPassword = selectedPlayer?.is_admin === true;
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitError(null);
@@ -117,6 +124,11 @@ export default function GroupAccessPage() {
       return;
     }
 
+    if (needsAdminPassword && !adminPassword.trim()) {
+      setSubmitError("Informe também a senha de administrador.");
+      return;
+    }
+
     try {
       setSubmitting(true);
 
@@ -124,6 +136,7 @@ export default function GroupAccessPage() {
         p_group_code: group.code,
         p_player_name: selectedPlayerName,
         p_group_password: groupPassword,
+        p_admin_password: needsAdminPassword ? adminPassword : "",
       });
 
       if (error) {
@@ -138,7 +151,11 @@ export default function GroupAccessPage() {
       }
 
       if (!result.access_granted) {
-        setSubmitError("Senha incorreta para este grupo.");
+        setSubmitError(
+          needsAdminPassword
+            ? "Senha do grupo ou senha de administrador incorreta."
+            : "Senha incorreta para este grupo."
+        );
         return;
       }
 
@@ -208,8 +225,8 @@ export default function GroupAccessPage() {
                   </h1>
 
                   <p className="mt-4 max-w-xl text-lg leading-8 text-muted-foreground">
-                    Escolha seu nome na lista e informe a senha do grupo para
-                    continuar.
+                    Escolha seu nome na lista. Todos usam a senha do grupo;
+                    administradores informam também a senha de administrador.
                   </p>
 
                   <div className="mt-8 flex flex-wrap gap-3 text-sm text-muted-foreground">
@@ -259,7 +276,10 @@ export default function GroupAccessPage() {
                         <select
                           id="player"
                           value={selectedPlayerName}
-                          onChange={(e) => setSelectedPlayerName(e.target.value)}
+                          onChange={(e) => {
+                            setSelectedPlayerName(e.target.value);
+                            setAdminPassword("");
+                          }}
                           className="h-14 w-full appearance-none rounded-2xl border border-input bg-background/70 px-4 pr-11 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
                         >
                           {players.length === 0 ? (
@@ -293,11 +313,36 @@ export default function GroupAccessPage() {
                           type="password"
                           value={groupPassword}
                           onChange={(e) => setGroupPassword(e.target.value)}
-                          placeholder="Digite a senha do grupo"
+                          placeholder="Senha do grupo"
+                          autoComplete="current-password"
                           className="h-14 w-full rounded-2xl border border-input bg-background/70 pl-11 pr-4 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
                         />
                       </div>
                     </div>
+
+                    {needsAdminPassword && (
+                      <div>
+                        <label
+                          htmlFor="adminPassword"
+                          className="mb-2 block text-sm font-medium"
+                        >
+                          Senha de administrador
+                        </label>
+
+                        <div className="relative">
+                          <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                          <input
+                            id="adminPassword"
+                            type="password"
+                            value={adminPassword}
+                            onChange={(e) => setAdminPassword(e.target.value)}
+                            placeholder="Senha extra para perfil de administrador"
+                            autoComplete="new-password"
+                            className="h-14 w-full rounded-2xl border border-input bg-background/70 pl-11 pr-4 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
+                          />
+                        </div>
+                      </div>
+                    )}
 
                     {submitError && (
                       <div className="rounded-2xl border border-primary/40 bg-primary/10 px-4 py-3 text-sm text-foreground">

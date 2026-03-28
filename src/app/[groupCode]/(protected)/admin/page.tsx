@@ -78,6 +78,9 @@ export default function AdminPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
+  const [newAdminPassword, setNewAdminPassword] = useState("");
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState("");
+  const [savingAdminPassword, setSavingAdminPassword] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("poker-session");
@@ -399,6 +402,44 @@ export default function AdminPage() {
     }
   }
 
+  async function handleSaveAdminPassword() {
+    if (!session?.groupId) return;
+
+    if (newAdminPassword.trim().length < 4) {
+      setFeedback("A nova senha de administrador deve ter pelo menos 4 caracteres.");
+      return;
+    }
+
+    if (newAdminPassword !== confirmAdminPassword) {
+      setFeedback("A confirmação da senha de administrador não confere.");
+      return;
+    }
+
+    try {
+      setSavingAdminPassword(true);
+      setFeedback(null);
+
+      const { error } = await supabase.rpc("update_group_admin_password", {
+        p_group_id: session.groupId,
+        p_new_password: newAdminPassword.trim(),
+      });
+
+      if (error) throw error;
+
+      setNewAdminPassword("");
+      setConfirmAdminPassword("");
+      setFeedback("Senha de administrador atualizada com sucesso.");
+    } catch (err) {
+      setFeedback(
+        err instanceof Error
+          ? err.message
+          : "Erro ao atualizar a senha de administrador."
+      );
+    } finally {
+      setSavingAdminPassword(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -443,7 +484,7 @@ export default function AdminPage() {
           Administração
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Altere nome e senha do grupo, gerencie jogadores e partidas.
+          Altere nome, senha do grupo, senha de administradores, jogadores e partidas.
         </p>
       </div>
 
@@ -553,16 +594,18 @@ export default function AdminPage() {
           <CardHeader>
             <CardTitle className="font-heading flex items-center gap-2 text-2xl">
               <KeyRound className="size-5" />
-              Segurança do grupo
+              Senha do grupo
             </CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              Senha que os jogadores usam junto ao nome ao entrar no grupo.
+              Todos os jogadores usam esta senha junto ao nome ao entrar no grupo.
             </p>
           </CardHeader>
 
           <CardContent className="space-y-4">
             <div>
-              <label className="mb-2 block text-sm font-medium">Nova senha</label>
+              <label className="mb-2 block text-sm font-medium">
+                Nova senha do grupo
+              </label>
               <input
                 type="password"
                 value={newPassword}
@@ -574,7 +617,7 @@ export default function AdminPage() {
 
             <div>
               <label className="mb-2 block text-sm font-medium">
-                Confirmar nova senha
+                Confirmar senha do grupo
               </label>
               <input
                 type="password"
@@ -599,7 +642,69 @@ export default function AdminPage() {
               ) : (
                 <>
                   <Save className="mr-2 size-4" />
-                  Atualizar senha
+                  Atualizar senha do grupo
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section>
+        <Card className="rounded-[2rem] border-border/70 bg-card/60 shadow-xl shadow-black/10">
+          <CardHeader>
+            <CardTitle className="font-heading flex items-center gap-2 text-2xl">
+              <Shield className="size-5" />
+              Senha dos administradores
+            </CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Quem for administrador no grupo precisa desta senha além da senha do grupo
+              ao entrar.
+            </p>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                Nova senha de administrador
+              </label>
+              <input
+                type="password"
+                value={newAdminPassword}
+                onChange={(e) => setNewAdminPassword(e.target.value)}
+                autoComplete="new-password"
+                className="h-12 w-full rounded-2xl border border-input bg-background/70 px-4 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                Confirmar senha de administrador
+              </label>
+              <input
+                type="password"
+                value={confirmAdminPassword}
+                onChange={(e) => setConfirmAdminPassword(e.target.value)}
+                autoComplete="new-password"
+                className="h-12 w-full rounded-2xl border border-input bg-background/70 px-4 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
+              />
+            </div>
+
+            <Button
+              type="button"
+              onClick={() => void handleSaveAdminPassword()}
+              disabled={savingAdminPassword}
+              className="h-12 rounded-full"
+            >
+              {savingAdminPassword ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 size-4" />
+                  Atualizar senha de administrador
                 </>
               )}
             </Button>

@@ -16,6 +16,8 @@ export default function CriarGrupoPage() {
 
   const [groupName, setGroupName] = useState("");
   const [groupPassword, setGroupPassword] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState("");
   const [playerName, setPlayerName] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -27,9 +29,15 @@ export default function CriarGrupoPage() {
 
     const trimmedGroupName = groupName.trim();
     const trimmedGroupPassword = groupPassword.trim();
+    const trimmedAdminPassword = adminPassword.trim();
     const trimmedPlayerName = playerName.trim();
 
-    if (!trimmedGroupName || !trimmedGroupPassword || !trimmedPlayerName) {
+    if (
+      !trimmedGroupName ||
+      !trimmedGroupPassword ||
+      !trimmedAdminPassword ||
+      !trimmedPlayerName
+    ) {
       setError("Preencha todos os campos.");
       return;
     }
@@ -39,12 +47,23 @@ export default function CriarGrupoPage() {
       return;
     }
 
+    if (trimmedAdminPassword.length < 4) {
+      setError("A senha de administrador deve ter pelo menos 4 caracteres.");
+      return;
+    }
+
+    if (trimmedAdminPassword !== confirmAdminPassword.trim()) {
+      setError("A confirmação da senha de administrador não confere.");
+      return;
+    }
+
     try {
       setLoading(true);
 
       const { data, error } = await supabase.rpc("create_group_with_admin", {
         p_group_name: trimmedGroupName,
         p_group_password: trimmedGroupPassword,
+        p_admin_password: trimmedAdminPassword,
         p_admin_player_name: trimmedPlayerName,
       });
 
@@ -119,8 +138,9 @@ export default function CriarGrupoPage() {
               <BlurFade inView delay={0.16}>
                 <div className="mt-6 max-w-xl text-lg leading-8 text-muted-foreground">
                   <TextAnimate animation="blurInUp" by="word" once>
-                    Escolha o nome do grupo, defina uma senha única e crie seu
-                    jogador inicial já como administrador.
+                    Defina a senha do grupo (para todos), a senha de
+                    administrador (só para admins) e crie seu jogador inicial já
+                    como administrador.
                   </TextAnimate>
                 </div>
               </BlurFade>
@@ -134,6 +154,11 @@ export default function CriarGrupoPage() {
                   <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card/50 px-4 py-3">
                     <Sparkles className="size-4 text-secondary" />
                     O primeiro jogador criado já entra como administrador.
+                  </div>
+                  <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card/50 px-4 py-3">
+                    <Sparkles className="size-4 text-secondary" />
+                    Quem for admin no login usa a senha do grupo e a senha de
+                    administrador.
                   </div>
                 </div>
               </BlurFade>
@@ -172,6 +197,43 @@ export default function CriarGrupoPage() {
                       value={groupPassword}
                       onChange={(e) => setGroupPassword(e.target.value)}
                       placeholder="Mínimo de 4 caracteres"
+                      autoComplete="new-password"
+                      className="h-13 w-full rounded-2xl border border-input bg-background/70 px-4 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="adminPassword"
+                      className="mb-2 block text-sm font-medium"
+                    >
+                      Senha de administrador
+                    </label>
+                    <input
+                      id="adminPassword"
+                      type="password"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      placeholder="Para quem for admin no grupo (mín. 4 caracteres)"
+                      autoComplete="new-password"
+                      className="h-13 w-full rounded-2xl border border-input bg-background/70 px-4 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="confirmAdminPassword"
+                      className="mb-2 block text-sm font-medium"
+                    >
+                      Confirmar senha de administrador
+                    </label>
+                    <input
+                      id="confirmAdminPassword"
+                      type="password"
+                      value={confirmAdminPassword}
+                      onChange={(e) => setConfirmAdminPassword(e.target.value)}
+                      placeholder="Repita a senha de administrador"
+                      autoComplete="new-password"
                       className="h-13 w-full rounded-2xl border border-input bg-background/70 px-4 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
                     />
                   </div>
