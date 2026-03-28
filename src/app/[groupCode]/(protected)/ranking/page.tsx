@@ -8,16 +8,19 @@ import {
   Crown,
   Loader2,
   Plus,
+  Share2,
   Swords,
   TrendingDown,
   Users,
 } from "lucide-react";
 
+import { RankingShareModal } from "@/components/ranking-share-modal";
 import { PlayerAvatar } from "@/components/player-avatar";
 import { StatsStrip } from "@/components/stats-strip";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/lib/supabase/client";
+import { computeRankMovements } from "@/lib/ranking-rank-movement";
 import { cn } from "@/lib/utils";
 import { labelMatchStatus, matchStatusBadgeClassName } from "@/lib/match-status";
 
@@ -54,6 +57,15 @@ export default function RankingPage() {
   const [session, setSession] = useState<PokerSession | null>(null);
   const [ranking, setRanking] = useState<GroupRankingRow[]>([]);
   const [recentMatches, setRecentMatches] = useState<MatchSummaryRow[]>([]);
+  const [lastClosedMatchPlayedAt, setLastClosedMatchPlayedAt] = useState<
+    string | null
+  >(null);
+  const [lastClosedProfits, setLastClosedProfits] = useState<Map<
+    string,
+    number
+  > | null>(null);
+
+  const [shareRankingOpen, setShareRankingOpen] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +102,8 @@ export default function RankingPage() {
       try {
         setLoading(true);
         setError(null);
+        setLastClosedMatchPlayedAt(null);
+        setLastClosedProfits(null);
 
         const [
           { data: rankingData, error: rankingError },
@@ -127,6 +141,37 @@ export default function RankingPage() {
           }))
         );
         setRecentMatches((matchData ?? []) as MatchSummaryRow[]);
+
+        const { data: lastClosedRow } = await supabase
+          .from("v_match_summary")
+          .select("match_id, played_at")
+          .eq("group_id", session.groupId)
+          .eq("status", "closed")
+          .order("played_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (lastClosedRow?.match_id) {
+          const { data: entryRows, error: entriesErr } = await supabase
+            .from("match_entries")
+            .select("player_id, profit")
+            .eq("match_id", lastClosedRow.match_id);
+
+          if (entriesErr) throw entriesErr;
+
+          setLastClosedMatchPlayedAt(lastClosedRow.played_at);
+          setLastClosedProfits(
+            new Map(
+              (entryRows ?? []).map((row) => [
+                row.player_id as string,
+                Number(row.profit),
+              ])
+            )
+          );
+        } else {
+          setLastClosedMatchPlayedAt(null);
+          setLastClosedProfits(null);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Erro ao carregar o ranking.");
       } finally {
@@ -148,6 +193,11 @@ export default function RankingPage() {
       (a, b) => b.matches_played - a.matches_played
     )[0];
   }, [ranking]);
+
+  const rankingMovements = useMemo(
+    () => computeRankMovements(ranking, lastClosedProfits),
+    [ranking, lastClosedProfits]
+  );
 
   if (loading) {
     return (
@@ -277,17 +327,29 @@ export default function RankingPage() {
 
       <section className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
         <Card className="rounded-[2rem] border-border/70 bg-card/60 shadow-xl shadow-black/10">
-          <CardHeader className="flex flex-row items-center justify-between gap-4">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4">
             <div>
               <CardTitle className="font-heading text-2xl">Ranking</CardTitle>
             </div>
 
-            <Button asChild className="rounded-full">
-              <Link href={`/${groupCode}/partidas/nova`}>
-                <Plus className="mr-2 size-4" />
-                Nova partida
-              </Link>
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full"
+                disabled={ranking.length === 0 || !session}
+                onClick={() => setShareRankingOpen(true)}
+              >
+                <Share2 className="mr-2 size-4" />
+                Post Instagram
+              </Button>
+              <Button asChild className="rounded-full">
+                <Link href={`/${groupCode}/partidas/nova`}>
+                  <Plus className="mr-2 size-4" />
+                  Nova partida
+                </Link>
+              </Button>
+            </div>
           </CardHeader>
 
           <CardContent>
@@ -480,6 +542,17 @@ export default function RankingPage() {
           </Card>
         </div>
       </section>
+
+      {session && shareRankingOpen && (
+        <RankingShareModal
+          open
+          onClose={() => setShareRankingOpen(false)}
+          highlightPlayerId={session.playerId}
+          ranking={ranking}
+          movements={rankingMovements}
+          lastClosedMatchPlayedAt={lastClosedMatchPlayedAt}
+        />
+      )}
     </div>
   );
 }

@@ -253,10 +253,15 @@ export default function AdminPage() {
 
   async function handleDeleteMatch(matchId: string) {
     const confirmed = window.confirm(
-      "Tem certeza que deseja excluir esta partida? Esta ação não pode ser desfeita."
+      "Excluir esta partida permanentemente? Todas as entradas, compras e resultados dela serão apagados. O ranking e os saldos dos jogadores passam a considerar apenas as partidas que restarem. Esta ação não pode ser desfeita."
     );
 
     if (!confirmed) return;
+
+    if (!session?.playerId) {
+      setFeedback("Sessão inválida; entre de novo no grupo.");
+      return;
+    }
 
     try {
       setDeletingMatchId(matchId);
@@ -264,12 +269,15 @@ export default function AdminPage() {
 
       const { error } = await supabase.rpc("admin_delete_match", {
         p_match_id: matchId,
+        p_admin_player_id: session.playerId,
       });
 
       if (error) throw error;
 
       setMatches((prev) => prev.filter((match) => match.match_id !== matchId));
-      setFeedback("Partida excluída com sucesso.");
+      setFeedback(
+        "Partida excluída. Ranking e totais dos jogadores foram atualizados automaticamente."
+      );
     } catch (err) {
       setFeedback(
         err instanceof Error ? err.message : "Erro ao excluir partida."
@@ -547,6 +555,10 @@ export default function AdminPage() {
             <CardTitle className="font-heading text-2xl">
               Partidas do grupo
             </CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Só administradores. Ao excluir uma partida, entradas e compras dela são apagadas; o ranking e os
+              saldos passam a refletir apenas as partidas que restarem.
+            </p>
           </CardHeader>
 
           <CardContent className="space-y-4">

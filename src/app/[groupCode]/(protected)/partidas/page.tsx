@@ -16,6 +16,7 @@ import {
   Scale,
   SlidersHorizontal,
   Swords,
+  Trash2,
 } from "lucide-react";
 
 import { PlayerAvatar } from "@/components/player-avatar";
@@ -70,6 +71,8 @@ export default function PartidasPage() {
   );
   const [matchesPage, setMatchesPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<MatchListFilter>("all");
+  const [deletingMatchId, setDeletingMatchId] = useState<string | null>(null);
+  const [listFeedback, setListFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem("poker-session");
@@ -122,6 +125,38 @@ export default function PartidasPage() {
 
     loadMatches();
   }, [session]);
+
+  async function handleDeleteMatch(matchId: string) {
+    const confirmed = window.confirm(
+      "Excluir esta partida permanentemente? Todas as entradas e resultados dela serão apagados; o ranking passará a considerar só as partidas restantes. Não dá para desfazer."
+    );
+    if (!confirmed) return;
+    if (!session?.playerId || !session.isAdmin) {
+      setListFeedback("Apenas administradores podem excluir partidas.");
+      return;
+    }
+
+    try {
+      setDeletingMatchId(matchId);
+      setListFeedback(null);
+
+      const { error } = await supabase.rpc("admin_delete_match", {
+        p_match_id: matchId,
+        p_admin_player_id: session.playerId,
+      });
+
+      if (error) throw error;
+
+      setMatches((prev) => prev.filter((m) => m.match_id !== matchId));
+      setListFeedback("Partida excluída. Ranking e saldos foram atualizados.");
+    } catch (err) {
+      setListFeedback(
+        err instanceof Error ? err.message : "Erro ao excluir a partida."
+      );
+    } finally {
+      setDeletingMatchId(null);
+    }
+  }
 
   useEffect(() => {
     setMatchesPage(1);
@@ -282,6 +317,11 @@ export default function PartidasPage() {
         <CardHeader className="flex flex-row items-center justify-between gap-4">
           <div>
             <CardTitle className="font-heading text-2xl">Partidas</CardTitle>
+            {session?.isAdmin ? (
+              <p className="mt-1 text-sm text-muted-foreground">
+                Como admin, você pode excluir uma partida na lista abaixo (botão ao lado de «Ver detalhes»).
+              </p>
+            ) : null}
           </div>
 
           <Button asChild className="rounded-full">
@@ -293,6 +333,11 @@ export default function PartidasPage() {
         </CardHeader>
 
         <CardContent>
+          {listFeedback && (
+            <div className="mb-4 rounded-2xl border border-border/70 bg-background/40 px-4 py-3 text-sm text-foreground">
+              {listFeedback}
+            </div>
+          )}
           {matches.length === 0 ? (
             <div className="rounded-2xl border border-border/70 bg-background/30 px-4 py-12 text-center text-sm text-muted-foreground">
               Nenhuma partida registrada ainda.
@@ -413,7 +458,7 @@ export default function PartidasPage() {
 
                         <div
                           className={cn(
-                            "flex justify-end",
+                            "flex flex-wrap items-center justify-end gap-2",
                             open ? "mt-4 border-t border-border/50 pt-3" : "mt-3"
                           )}
                         >
@@ -424,6 +469,28 @@ export default function PartidasPage() {
                             Ver detalhes
                             <ArrowRight className="size-4" />
                           </Link>
+                          {session?.isAdmin ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="rounded-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              disabled={deletingMatchId === match.match_id}
+                              onClick={() => void handleDeleteMatch(match.match_id)}
+                            >
+                              {deletingMatchId === match.match_id ? (
+                                <>
+                                  <Loader2 className="mr-2 size-4 animate-spin" />
+                                  Excluindo…
+                                </>
+                              ) : (
+                                <>
+                                  <Trash2 className="mr-2 size-4" />
+                                  Excluir partida
+                                </>
+                              )}
+                            </Button>
+                          ) : null}
                         </div>
                       </div>
                     </div>
