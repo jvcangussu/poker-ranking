@@ -25,6 +25,7 @@ import {
   Share2,
   Shield,
   Swords,
+  UserMinus,
   UserPlus,
   Users,
   Wallet,
@@ -187,6 +188,14 @@ export default function MatchDetailsPage() {
 
   const [selectedPlayerToAdd, setSelectedPlayerToAdd] = useState("");
   const [addingParticipant, setAddingParticipant] = useState(false);
+
+  const [removeParticipantModal, setRemoveParticipantModal] = useState<{
+    playerId: string;
+    playerName: string;
+  } | null>(null);
+  const [removingParticipantId, setRemovingParticipantId] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     const stored = localStorage.getItem("poker-session");
@@ -397,7 +406,7 @@ export default function MatchDetailsPage() {
         await loadData(session);
       }
     } catch (err) {
-      let message = "Erro ao enviar para análise.";
+      let message = "Erro ao enviar resultado.";
 
       if (err && typeof err === "object") {
         const maybeError = err as {
@@ -715,6 +724,32 @@ export default function MatchDetailsPage() {
     }
   }
 
+  async function handleRemoveMatchParticipant(targetPlayerId: string) {
+    if (!match || !session) return;
+
+    try {
+      setRemovingParticipantId(targetPlayerId);
+      setPageError(null);
+
+      const { error } = await supabase.rpc("remove_match_participant", {
+        p_match_id: match.match_id,
+        p_target_player_id: targetPlayerId,
+        p_actor_player_id: session.playerId,
+      });
+
+      if (error) throw error;
+
+      setRemoveParticipantModal(null);
+      await loadData(session);
+    } catch (err) {
+      setPageError(
+        err instanceof Error ? err.message : "Erro ao remover participante."
+      );
+    } finally {
+      setRemovingParticipantId(null);
+    }
+  }
+
   async function handleFinalizeMatch() {
     if (!match || !session) return;
     if (session.playerId !== match.created_by_player_id) return;
@@ -751,6 +786,12 @@ export default function MatchDetailsPage() {
     if (!match?.status) return null;
     return isMatchStatus(match.status) ? match.status : null;
   }, [match?.status]);
+
+  const canRemoveParticipants =
+    canManageParticipants &&
+    matchStatus !== null &&
+    matchStatus !== "in_payment" &&
+    matchStatus !== "closed";
 
   const isHost = Boolean(
     session && match && session.playerId === match.created_by_player_id
@@ -1238,6 +1279,27 @@ export default function MatchDetailsPage() {
                         </div>
                         </div>
 
+                        {canRemoveParticipants && (
+                          <div className="flex flex-wrap justify-end gap-2 border-t border-border/40 pt-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 min-h-8 rounded-full border-rose-500/35 px-3 text-[11px] font-medium text-rose-200 hover:bg-rose-500/10 hover:text-rose-100 sm:text-xs"
+                              onClick={() =>
+                                setRemoveParticipantModal({
+                                  playerId: entry.playerId,
+                                  playerName: entry.playerName,
+                                })
+                              }
+                              aria-label={`Remover ${entry.playerName} da partida`}
+                            >
+                              <UserMinus className="mr-1 size-3.5 shrink-0" aria-hidden />
+                              Remover da partida
+                            </Button>
+                          </div>
+                        )}
+
                         {isHost &&
                           (matchStatus === "in_adjustment" ||
                             matchStatus === "in_payment") && (
@@ -1550,7 +1612,7 @@ export default function MatchDetailsPage() {
                               ) : (
                                 <>
                                   <SendHorizontal className="size-3.5" />
-                                  Enviar para análise
+                                  Enviar Resultado
                                 </>
                               )}
                             </Button>
@@ -1860,6 +1922,52 @@ export default function MatchDetailsPage() {
             partida.
           </p>
         )}
+      </MobileModal>
+
+      <MobileModal
+        open={removeParticipantModal !== null}
+        onClose={() => {
+          if (!removingParticipantId) setRemoveParticipantModal(null);
+        }}
+        title="Remover jogador da partida?"
+        description={
+          removeParticipantModal
+            ? `${removeParticipantModal.playerName} sai desta partida e os buy-ins / resultados dessa pessoa nesta rodada são apagados. Disponível para o dono da partida ou um administrador.`
+            : undefined
+        }
+      >
+        <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 rounded-full"
+            disabled={removingParticipantId !== null}
+            onClick={() => setRemoveParticipantModal(null)}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            className="h-11 rounded-full border border-rose-600/50 bg-rose-600 text-white hover:bg-rose-600/90"
+            disabled={removingParticipantId !== null || !removeParticipantModal}
+            onClick={() => {
+              if (!removeParticipantModal) return;
+              void handleRemoveMatchParticipant(removeParticipantModal.playerId);
+            }}
+          >
+            {removingParticipantId ? (
+              <>
+                <Loader2 className="mr-2 size-4 animate-spin" />
+                Removendo...
+              </>
+            ) : (
+              <>
+                <UserMinus className="mr-2 size-4" />
+                Remover
+              </>
+            )}
+          </Button>
+        </div>
       </MobileModal>
 
       <ChipCashoutModal
