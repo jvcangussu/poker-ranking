@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   Check,
@@ -11,7 +12,6 @@ import {
   LogOut,
   Save,
   Settings,
-  Shield,
   User,
 } from "lucide-react";
 
@@ -28,11 +28,6 @@ type GroupPublicByIdRow = {
   name: string;
   created_at: string;
   updated_at: string | null;
-};
-
-type UpdateGroupNameRow = {
-  id: string;
-  name: string;
 };
 
 type UpdatePlayerProfileRow = {
@@ -59,13 +54,6 @@ export default function ConfiguracoesPage() {
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
-
-  const [groupName, setGroupName] = useState("");
-  const [savingGroupName, setSavingGroupName] = useState(false);
-
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [savingPassword, setSavingPassword] = useState(false);
 
   const [playerName, setPlayerName] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
@@ -137,7 +125,6 @@ export default function ConfiguracoesPage() {
         setGroup(groupData as Group);
         setPlayer(playerData as Player);
 
-        setGroupName(groupData.name);
         setPlayerName(playerData.name);
         setPhotoUrl(playerData.photo_url ?? "");
         setPixKey(playerData.pix_key ?? "");
@@ -152,87 +139,6 @@ export default function ConfiguracoesPage() {
 
     loadData();
   }, [session]);
-
-  async function handleSaveGroupName() {
-    if (!session?.isAdmin || !group) return;
-
-    const trimmedName = groupName.trim();
-
-    if (!trimmedName) {
-      setFeedback("Informe um nome válido para o grupo.");
-      return;
-    }
-
-    try {
-      setSavingGroupName(true);
-      setFeedback(null);
-
-      const { data, error } = await supabase.rpc("update_group_name", {
-        p_group_id: group.id,
-        p_name: trimmedName,
-      });
-
-      if (error) throw error;
-
-      const updated = (data?.[0] as UpdateGroupNameRow | undefined) ?? null;
-
-      if (updated) {
-        setGroup((prev) => (prev ? { ...prev, name: updated.name } : prev));
-
-        const stored = localStorage.getItem("poker-session");
-        if (stored) {
-          const parsed = JSON.parse(stored) as PokerSession;
-          parsed.groupName = updated.name;
-          localStorage.setItem("poker-session", JSON.stringify(parsed));
-          setSession(parsed);
-        }
-      }
-
-      setFeedback("Nome do grupo atualizado com sucesso.");
-    } catch (err) {
-      setFeedback(
-        err instanceof Error ? err.message : "Erro ao salvar nome do grupo."
-      );
-    } finally {
-      setSavingGroupName(false);
-    }
-  }
-
-  async function handleSavePassword() {
-    if (!session?.isAdmin || !group) return;
-
-    if (newPassword.trim().length < 4) {
-      setFeedback("A nova senha deve ter pelo menos 4 caracteres.");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setFeedback("A confirmação da senha não confere.");
-      return;
-    }
-
-    try {
-      setSavingPassword(true);
-      setFeedback(null);
-
-      const { error } = await supabase.rpc("update_group_password", {
-        p_group_id: group.id,
-        p_new_password: newPassword.trim(),
-      });
-
-      if (error) throw error;
-
-      setNewPassword("");
-      setConfirmPassword("");
-      setFeedback("Senha do grupo atualizada com sucesso.");
-    } catch (err) {
-      setFeedback(
-        err instanceof Error ? err.message : "Erro ao atualizar a senha."
-      );
-    } finally {
-      setSavingPassword(false);
-    }
-  }
 
   async function handleSaveProfile() {
     if (!player) return;
@@ -382,13 +288,28 @@ export default function ConfiguracoesPage() {
           Configurações
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Gerencie o grupo e personalize o seu perfil.
+          Veja informações do grupo, copie o código ou o link e personalize o seu perfil. Para alterar o
+          nome ou a senha do grupo, use a página de administração.
         </p>
       </div>
 
       {feedback && (
         <div className="rounded-2xl border border-secondary/30 bg-secondary/15 px-4 py-3 text-sm text-foreground">
           {feedback}
+        </div>
+      )}
+
+      {session?.isAdmin && (
+        <div className="rounded-2xl border border-border/70 bg-background/40 px-4 py-3 text-sm text-muted-foreground">
+          Para alterar o <span className="font-medium text-foreground">nome</span> ou a{" "}
+          <span className="font-medium text-foreground">senha</span> do grupo, abra{" "}
+          <Link
+            href={`/${groupCode}/admin`}
+            className="font-medium text-secondary underline-offset-4 hover:underline"
+          >
+            Administração
+          </Link>
+          .
         </div>
       )}
 
@@ -577,119 +498,6 @@ export default function ConfiguracoesPage() {
                 </>
               )}
             </Button>
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-        <Card className="rounded-[2rem] border-border/70 bg-card/60 shadow-xl shadow-black/10">
-          <CardHeader>
-            <CardTitle className="font-heading flex items-center gap-2 text-2xl">
-              <Shield className="size-5" />
-              Configurações do grupo
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent className="space-y-4">
-            {!session?.isAdmin ? (
-              <div className="rounded-2xl border border-border/70 bg-background/30 px-4 py-3 text-sm text-muted-foreground">
-                Apenas administradores podem editar o nome do grupo.
-              </div>
-            ) : (
-              <>
-                <div>
-                  <label className="mb-2 block text-sm font-medium">
-                    Nome do grupo
-                  </label>
-                  <input
-                    type="text"
-                    value={groupName}
-                    onChange={(e) => setGroupName(e.target.value)}
-                    className="h-12 w-full rounded-2xl border border-input bg-background/70 px-4 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
-                  />
-                </div>
-
-                <Button
-                  type="button"
-                  onClick={handleSaveGroupName}
-                  disabled={savingGroupName}
-                  className="h-12 rounded-full"
-                >
-                  {savingGroupName ? (
-                    <>
-                      <Loader2 className="mr-2 size-4 animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 size-4" />
-                      Salvar nome do grupo
-                    </>
-                  )}
-                </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-[2rem] border-border/70 bg-card/60 shadow-xl shadow-black/10">
-          <CardHeader>
-            <CardTitle className="font-heading text-2xl">
-              Segurança do grupo
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent className="space-y-4">
-            {!session?.isAdmin ? (
-              <div className="rounded-2xl border border-border/70 bg-background/30 px-4 py-3 text-sm text-muted-foreground">
-                Apenas administradores podem alterar a senha do grupo.
-              </div>
-            ) : (
-              <>
-                <div>
-                  <label className="mb-2 block text-sm font-medium">
-                    Nova senha
-                  </label>
-                  <input
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="h-12 w-full rounded-2xl border border-input bg-background/70 px-4 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium">
-                    Confirmar nova senha
-                  </label>
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="h-12 w-full rounded-2xl border border-input bg-background/70 px-4 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
-                  />
-                </div>
-
-                <Button
-                  type="button"
-                  onClick={handleSavePassword}
-                  disabled={savingPassword}
-                  className="h-12 rounded-full"
-                >
-                  {savingPassword ? (
-                    <>
-                      <Loader2 className="mr-2 size-4 animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 size-4" />
-                      Atualizar senha
-                    </>
-                  )}
-                </Button>
-              </>
-            )}
           </CardContent>
         </Card>
       </section>

@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   Crown,
+  KeyRound,
   Loader2,
   Pencil,
+  Settings,
   Shield,
   ShieldOff,
   Trash2,
@@ -22,6 +24,19 @@ import { labelMatchStatus, matchStatusBadgeClassName } from "@/lib/match-status"
 
 import type { PokerSession } from "@/types/session";
 import type { MatchSummaryRow, Player } from "@/types/database";
+
+type GroupPublicByIdRow = {
+  id: string;
+  code: string;
+  name: string;
+  created_at: string;
+  updated_at: string | null;
+};
+
+type UpdateGroupNameRow = {
+  id: string;
+  name: string;
+};
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -55,6 +70,12 @@ export default function AdminPage() {
   const [deletingPlayerId, setDeletingPlayerId] = useState<string | null>(null);
   const [togglingAdminPlayerId, setTogglingAdminPlayerId] = useState<string | null>(null);
   const [deletingMatchId, setDeletingMatchId] = useState<string | null>(null);
+
+  const [groupName, setGroupName] = useState("");
+  const [savingGroupName, setSavingGroupName] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("poker-session");
@@ -91,6 +112,7 @@ export default function AdminPage() {
     const [
       { data: playersData, error: playersError },
       { data: matchesData, error: matchesError },
+      { data: groupRpcData, error: groupError },
     ] = await Promise.all([
       supabase
         .from("players")
@@ -104,11 +126,19 @@ export default function AdminPage() {
         .select("*")
         .eq("group_id", currentSession.groupId)
         .order("played_at", { ascending: false }),
+      supabase.rpc("get_group_public_by_id", {
+        p_group_id: currentSession.groupId,
+      }),
     ]);
 
     if (playersError) throw playersError;
     if (matchesError) throw matchesError;
+    if (groupError) throw groupError;
 
+    const groupRow = (groupRpcData?.[0] as GroupPublicByIdRow | undefined) ?? null;
+    if (!groupRow) throw new Error("Grupo não encontrado.");
+
+    setGroupName(groupRow.name);
     setPlayers((playersData ?? []) as Player[]);
     setMatches((matchesData ?? []) as MatchSummaryRow[]);
   }
@@ -287,6 +317,87 @@ export default function AdminPage() {
     }
   }
 
+  async function handleSaveGroupName() {
+    if (!session?.groupId) return;
+
+    const trimmedName = groupName.trim();
+
+    if (!trimmedName) {
+      setFeedback("Informe um nome válido para o grupo.");
+      return;
+    }
+
+    try {
+      setSavingGroupName(true);
+      setFeedback(null);
+
+      const { data, error } = await supabase.rpc("update_group_name", {
+        p_group_id: session.groupId,
+        p_name: trimmedName,
+      });
+
+      if (error) throw error;
+
+      const updated = (data?.[0] as UpdateGroupNameRow | undefined) ?? null;
+
+      if (updated) {
+        setGroupName(updated.name);
+
+        const stored = localStorage.getItem("poker-session");
+        if (stored) {
+          const parsed = JSON.parse(stored) as PokerSession;
+          parsed.groupName = updated.name;
+          localStorage.setItem("poker-session", JSON.stringify(parsed));
+          setSession(parsed);
+        }
+      }
+
+      setFeedback("Nome do grupo atualizado com sucesso.");
+    } catch (err) {
+      setFeedback(
+        err instanceof Error ? err.message : "Erro ao salvar nome do grupo."
+      );
+    } finally {
+      setSavingGroupName(false);
+    }
+  }
+
+  async function handleSavePassword() {
+    if (!session?.groupId) return;
+
+    if (newPassword.trim().length < 4) {
+      setFeedback("A nova senha deve ter pelo menos 4 caracteres.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setFeedback("A confirmação da senha não confere.");
+      return;
+    }
+
+    try {
+      setSavingPassword(true);
+      setFeedback(null);
+
+      const { error } = await supabase.rpc("update_group_password", {
+        p_group_id: session.groupId,
+        p_new_password: newPassword.trim(),
+      });
+
+      if (error) throw error;
+
+      setNewPassword("");
+      setConfirmPassword("");
+      setFeedback("Senha do grupo atualizada com sucesso.");
+    } catch (err) {
+      setFeedback(
+        err instanceof Error ? err.message : "Erro ao atualizar a senha."
+      );
+    } finally {
+      setSavingPassword(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -317,7 +428,7 @@ export default function AdminPage() {
           Administração
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Gerencie jogadores e manutenção do grupo.
+          Altere nome e senha do grupo, gerencie jogadores e partidas.
         </p>
       </div>
 
@@ -375,6 +486,108 @@ export default function AdminPage() {
               <p className="text-sm text-muted-foreground">Seu acesso</p>
               <p className="font-heading text-2xl font-semibold">Admin</p>
             </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+        <Card className="rounded-[2rem] border-border/70 bg-card/60 shadow-xl shadow-black/10">
+          <CardHeader>
+            <CardTitle className="font-heading flex items-center gap-2 text-2xl">
+              <Settings className="size-5" />
+              Configurações do grupo
+            </CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Nome exibido no app e nos convites.
+            </p>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            <div>
+              <label className="mb-2 block text-sm font-medium">Nome do grupo</label>
+              <input
+                type="text"
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                className="h-12 w-full rounded-2xl border border-input bg-background/70 px-4 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
+              />
+            </div>
+
+            <Button
+              type="button"
+              onClick={() => void handleSaveGroupName()}
+              disabled={savingGroupName}
+              className="h-12 rounded-full"
+            >
+              {savingGroupName ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 size-4" />
+                  Salvar nome do grupo
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-[2rem] border-border/70 bg-card/60 shadow-xl shadow-black/10">
+          <CardHeader>
+            <CardTitle className="font-heading flex items-center gap-2 text-2xl">
+              <KeyRound className="size-5" />
+              Segurança do grupo
+            </CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Senha que os jogadores usam junto ao nome ao entrar no grupo.
+            </p>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            <div>
+              <label className="mb-2 block text-sm font-medium">Nova senha</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoComplete="new-password"
+                className="h-12 w-full rounded-2xl border border-input bg-background/70 px-4 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                Confirmar nova senha
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
+                className="h-12 w-full rounded-2xl border border-input bg-background/70 px-4 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
+              />
+            </div>
+
+            <Button
+              type="button"
+              onClick={() => void handleSavePassword()}
+              disabled={savingPassword}
+              className="h-12 rounded-full"
+            >
+              {savingPassword ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 size-4" />
+                  Atualizar senha
+                </>
+              )}
+            </Button>
           </CardContent>
         </Card>
       </section>
