@@ -154,7 +154,7 @@ export default function GroupAccessPage() {
         })
       );
 
-      router.push(`/${result.group_code}/dashboard`);
+      router.push(`/${result.group_code}/ranking`);
     } catch (error) {
       setSubmitError(
         error instanceof Error ? error.message : "Erro ao validar o acesso."

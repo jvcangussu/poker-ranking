@@ -70,7 +70,7 @@ export default function CriarGrupoPage() {
         })
       );
 
-      router.push(`/${createdGroup.group_code}/dashboard`);
+      router.push(`/${createdGroup.group_code}/ranking`);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Erro ao criar o grupo.";

@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, CalendarDays, Loader2, NotebookPen } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CalendarDays,
+  Loader2,
+  NotebookPen,
+  Wallet,
+} from "lucide-react";
 
 import { supabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -39,7 +46,8 @@ export default function NovaPartidaPage() {
 
   const [notes, setNotes] = useState("");
   const [playedAt, setPlayedAt] = useState(getDefaultLocalDateTime());
-  const [creatorBuyIn, setCreatorBuyIn] = useState("");
+  const [hostPixKey, setHostPixKey] = useState("");
+  const [maxBuyIn, setMaxBuyIn] = useState("");
 
   const [loadingSession, setLoadingSession] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -72,6 +80,32 @@ export default function NovaPartidaPage() {
     }
   }, [groupCode]);
 
+  useEffect(() => {
+    if (!session?.playerId || !session.groupId) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from("players")
+        .select("pix_key")
+        .eq("id", session.playerId)
+        .eq("group_id", session.groupId)
+        .maybeSingle();
+
+      if (cancelled || error) return;
+
+      const key = data?.pix_key?.trim();
+      if (key) {
+        setHostPixKey((prev) => (prev === "" ? key : prev));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.playerId, session?.groupId]);
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -85,6 +119,15 @@ export default function NovaPartidaPage() {
       return;
     }
 
+    if (!hostPixKey.trim()) {
+      setError("Informe o PIX do organizador (conta que receberá os buy-ins).");
+      return;
+    }
+
+    const maxParsed = maxBuyIn.trim()
+      ? Number(String(maxBuyIn).replace(",", "."))
+      : null;
+
     try {
       setSubmitting(true);
       setError(null);
@@ -96,6 +139,11 @@ export default function NovaPartidaPage() {
         p_created_by_player_id: session.playerId,
         p_notes: notes.trim() || null,
         p_played_at: playedAtIso,
+        p_host_pix_key: hostPixKey.trim(),
+        p_max_buy_in:
+          maxParsed != null && Number.isFinite(maxParsed) && maxParsed > 0
+            ? maxParsed
+            : null,
       });
 
       if (error) throw error;
@@ -106,12 +154,10 @@ export default function NovaPartidaPage() {
         throw new Error("Não foi possível criar a partida.");
       }
 
-      const buyInValue = Number(creatorBuyIn || 0);
-
       const { error: entryError } = await supabase.rpc("upsert_match_entry", {
         p_match_id: createdMatch.match_id,
         p_player_id: session.playerId,
-        p_buy_in: buyInValue,
+        p_buy_in: 0,
         p_cash_out: 0,
       });
 
@@ -164,7 +210,8 @@ export default function NovaPartidaPage() {
           <CardHeader>
             <CardTitle className="font-heading text-2xl">Nova partida</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              Crie a partida agora e preencha os resultados na próxima etapa.
+              Você entra na partida com buy-in zero e registra as compras de fichas na
+              tela da partida.
             </p>
           </CardHeader>
 
@@ -209,25 +256,55 @@ export default function NovaPartidaPage() {
                     className="min-h-[140px] w-full rounded-2xl border border-input bg-background/70 pl-11 pr-4 pt-3 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label
-                    htmlFor="creatorBuyIn"
-                    className="mb-2 block text-sm font-medium"
-                  >
-                    Seu buy-in inicial
-                  </label>
+              <div>
+                <label
+                  htmlFor="hostPixKey"
+                  className="mb-2 block text-sm font-medium"
+                >
+                  PIX do organizador
+                </label>
+                <p className="mb-2 text-xs text-muted-foreground">
+                  Conta que receberá os buy-ins. Se você salvou uma chave em
+                  Configurações, ela aparece aqui — pode editar ou trocar antes de
+                  criar.
+                </p>
+                <div className="relative">
+                  <Wallet className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <input
-                    id="creatorBuyIn"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={creatorBuyIn}
-                    onChange={(e) => setCreatorBuyIn(e.target.value)}
-                    placeholder="Ex.: 100"
-                    className="h-14 w-full rounded-2xl border border-input bg-background/70 px-4 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
+                    id="hostPixKey"
+                    type="text"
+                    value={hostPixKey}
+                    onChange={(e) => setHostPixKey(e.target.value)}
+                    placeholder="E-mail, telefone, CPF/CNPJ ou chave aleatória"
+                    autoComplete="off"
+                    className="h-14 w-full rounded-2xl border border-input bg-background/70 pl-11 pr-4 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="maxBuyIn"
+                  className="mb-2 block text-sm font-medium"
+                >
+                  Buy-in máximo (por compra)
+                </label>
+                <p className="mb-2 text-xs text-muted-foreground">
+                  Limite para cada compra de fichas na mesa. Deixe vazio para não
+                  limitar.
+                </p>
+                <input
+                  id="maxBuyIn"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={maxBuyIn}
+                  onChange={(e) => setMaxBuyIn(e.target.value)}
+                  placeholder="Ex.: 200 — vazio = sem limite"
+                  className="h-14 w-full rounded-2xl border border-input bg-background/70 px-4 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
+                />
               </div>
 
               {error && (
@@ -280,8 +357,8 @@ export default function NovaPartidaPage() {
             <div className="rounded-2xl border border-border/70 bg-background/30 p-4">
               <p className="text-sm text-muted-foreground">Próximo passo</p>
               <p className="mt-1 text-sm leading-6 text-foreground">
-                Depois de criar, você será redirecionado para a tela de detalhe da
-                partida, onde poderá preencher os participantes e os resultados.
+                Na partida, use &quot;Buy-in&quot; para registrar cada compra de fichas
+                quando o jogo começar.
               </p>
             </div>
           </CardContent>

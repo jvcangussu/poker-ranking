@@ -17,6 +17,8 @@ import {
 import { supabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { labelMatchStatus, matchStatusBadgeClassName } from "@/lib/match-status";
 
 import type { PokerSession } from "@/types/session";
 import type { MatchSummaryRow, Player } from "@/types/database";
@@ -565,13 +567,12 @@ export default function AdminPage() {
                       </h3>
 
                       <span
-                        className={
-                          match.status === "open"
-                            ? "rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-foreground"
-                            : "rounded-full border border-secondary/30 bg-secondary px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-secondary-foreground"
-                        }
+                        className={cn(
+                          "rounded-full px-2.5 py-1 text-xs font-medium uppercase tracking-wide",
+                          matchStatusBadgeClassName(match.status)
+                        )}
                       >
-                        {match.status === "open" ? "Aberta" : "Fechada"}
+                        {labelMatchStatus(match.status)}
                       </span>
                     </div>
 
