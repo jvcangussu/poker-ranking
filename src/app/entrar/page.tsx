@@ -74,7 +74,8 @@ export default function EntrarPage() {
                 <div className="mt-6 max-w-xl text-lg leading-8 text-muted-foreground">
                   <TextAnimate animation="blurInUp" by="word" once>
                     Digite o código do grupo para seguir para a tela de acesso,
-                    escolher seu jogador e informar a senha do grupo.
+                    escolher seu jogador e informar a senha do grupo (e a de admin,
+                    se for administrador).
                   </TextAnimate>
                 </div>
               </BlurFade>
