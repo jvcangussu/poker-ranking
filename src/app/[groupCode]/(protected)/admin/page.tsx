@@ -17,6 +17,8 @@ import {
 import { supabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { labelMatchStatus, matchStatusBadgeClassName } from "@/lib/match-status";
 
 import type { PokerSession } from "@/types/session";
 import type { MatchSummaryRow, Player } from "@/types/database";
@@ -251,10 +253,15 @@ export default function AdminPage() {
 
   async function handleDeleteMatch(matchId: string) {
     const confirmed = window.confirm(
-      "Tem certeza que deseja excluir esta partida? Esta ação não pode ser desfeita."
+      "Excluir esta partida permanentemente? Todas as entradas, compras e resultados dela serão apagados. O ranking e os saldos dos jogadores passam a considerar apenas as partidas que restarem. Esta ação não pode ser desfeita."
     );
 
     if (!confirmed) return;
+
+    if (!session?.playerId) {
+      setFeedback("Sessão inválida; entre de novo no grupo.");
+      return;
+    }
 
     try {
       setDeletingMatchId(matchId);
@@ -262,12 +269,15 @@ export default function AdminPage() {
 
       const { error } = await supabase.rpc("admin_delete_match", {
         p_match_id: matchId,
+        p_admin_player_id: session.playerId,
       });
 
       if (error) throw error;
 
       setMatches((prev) => prev.filter((match) => match.match_id !== matchId));
-      setFeedback("Partida excluída com sucesso.");
+      setFeedback(
+        "Partida excluída. Ranking e totais dos jogadores foram atualizados automaticamente."
+      );
     } catch (err) {
       setFeedback(
         err instanceof Error ? err.message : "Erro ao excluir partida."
@@ -545,6 +555,10 @@ export default function AdminPage() {
             <CardTitle className="font-heading text-2xl">
               Partidas do grupo
             </CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Só administradores. Ao excluir uma partida, entradas e compras dela são apagadas; o ranking e os
+              saldos passam a refletir apenas as partidas que restarem.
+            </p>
           </CardHeader>
 
           <CardContent className="space-y-4">
@@ -565,13 +579,12 @@ export default function AdminPage() {
                       </h3>
 
                       <span
-                        className={
-                          match.status === "open"
-                            ? "rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-foreground"
-                            : "rounded-full border border-secondary/30 bg-secondary px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-secondary-foreground"
-                        }
+                        className={cn(
+                          "rounded-full px-2.5 py-1 text-xs font-medium uppercase tracking-wide",
+                          matchStatusBadgeClassName(match.status)
+                        )}
                       >
-                        {match.status === "open" ? "Aberta" : "Fechada"}
+                        {labelMatchStatus(match.status)}
                       </span>
                     </div>
 

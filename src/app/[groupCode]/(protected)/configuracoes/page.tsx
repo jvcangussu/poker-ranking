@@ -533,7 +533,20 @@ export default function ConfiguracoesPage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium">Chave Pix</label>
+              <label className="mb-2 block text-sm font-medium">
+                Chave Pix (padrão do grupo)
+              </label>
+              <p className="mb-2 text-xs text-muted-foreground">
+                Salve aqui a chave que será sugerida ao{" "}
+                <strong className="font-medium text-foreground/90">
+                  criar uma partida
+                </strong>{" "}
+                (PIX do organizador) e ao{" "}
+                <strong className="font-medium text-foreground/90">
+                  entrar em uma partida
+                </strong>
+                . Em todo caso você pode editar o valor na hora.
+              </p>
               <div className="relative">
                 <KeyRound className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <input

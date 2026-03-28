@@ -5,18 +5,31 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   ArrowRight,
-  CalendarDays,
+  Banknote,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Loader2,
   Plus,
+  Scale,
+  SlidersHorizontal,
   Swords,
-  Users,
+  Trash2,
 } from "lucide-react";
 
+import { PlayerAvatar } from "@/components/player-avatar";
+import { StatsStrip } from "@/components/stats-strip";
 import { supabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import {
+  labelMatchStatus,
+  matchStatusBadgeClassName,
+  type MatchStatus,
+} from "@/lib/match-status";
 
 import type { PokerSession } from "@/types/session";
 import type { MatchSummaryRow } from "@/types/database";
@@ -35,6 +48,10 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+const MATCHES_PAGE_SIZE = 5;
+
+type MatchListFilter = "all" | MatchStatus;
+
 export default function PartidasPage() {
   const params = useParams<{ groupCode: string }>();
 
@@ -49,6 +66,13 @@ export default function PartidasPage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [matchDetailsOpen, setMatchDetailsOpen] = useState<Record<string, boolean>>(
+    {}
+  );
+  const [matchesPage, setMatchesPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<MatchListFilter>("all");
+  const [deletingMatchId, setDeletingMatchId] = useState<string | null>(null);
+  const [listFeedback, setListFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem("poker-session");
@@ -102,13 +126,78 @@ export default function PartidasPage() {
     loadMatches();
   }, [session]);
 
+  async function handleDeleteMatch(matchId: string) {
+    const confirmed = window.confirm(
+      "Excluir esta partida permanentemente? Todas as entradas e resultados dela serão apagados; o ranking passará a considerar só as partidas restantes. Não dá para desfazer."
+    );
+    if (!confirmed) return;
+    if (!session?.playerId || !session.isAdmin) {
+      setListFeedback("Apenas administradores podem excluir partidas.");
+      return;
+    }
+
+    try {
+      setDeletingMatchId(matchId);
+      setListFeedback(null);
+
+      const { error } = await supabase.rpc("admin_delete_match", {
+        p_match_id: matchId,
+        p_admin_player_id: session.playerId,
+      });
+
+      if (error) throw error;
+
+      setMatches((prev) => prev.filter((m) => m.match_id !== matchId));
+      setListFeedback("Partida excluída. Ranking e saldos foram atualizados.");
+    } catch (err) {
+      setListFeedback(
+        err instanceof Error ? err.message : "Erro ao excluir a partida."
+      );
+    } finally {
+      setDeletingMatchId(null);
+    }
+  }
+
+  useEffect(() => {
+    setMatchesPage(1);
+  }, [statusFilter]);
+
+  const filteredMatches = useMemo(() => {
+    if (statusFilter === "all") return matches;
+    return matches.filter((m) => m.status === statusFilter);
+  }, [matches, statusFilter]);
+
   const totalMatches = matches.length;
-  const openMatches = matches.filter((match) => match.status === "open").length;
-  const closedMatches = matches.filter((match) => match.status === "closed").length;
-  const totalEntries = matches.reduce(
-    (acc, match) => acc + Number(match.total_entries ?? 0),
-    0
+  const filteredTotal = filteredMatches.length;
+  const totalMatchesPages = Math.max(
+    1,
+    Math.ceil(filteredTotal / MATCHES_PAGE_SIZE)
   );
+  const safeMatchesPage = Math.min(matchesPage, totalMatchesPages);
+
+  const matchesPageSlice = useMemo(() => {
+    const page = Math.min(matchesPage, totalMatchesPages);
+    const start = (page - 1) * MATCHES_PAGE_SIZE;
+    return filteredMatches.slice(start, start + MATCHES_PAGE_SIZE);
+  }, [filteredMatches, matchesPage, totalMatchesPages]);
+
+  useEffect(() => {
+    if (matchesPage > totalMatchesPages) {
+      setMatchesPage(totalMatchesPages);
+    }
+  }, [matchesPage, totalMatchesPages]);
+  const openMatches = matches.filter((m) => m.status === "open").length;
+  const inReviewMatches = matches.filter((m) => m.status === "in_review").length;
+  const inAdjustmentMatches = matches.filter(
+    (m) => m.status === "in_adjustment"
+  ).length;
+  const inPaymentMatches = matches.filter((m) => m.status === "in_payment").length;
+  const closedMatches = matches.filter((m) => m.status === "closed").length;
+
+  const stripValueClass =
+    "font-heading text-xs font-bold tabular-nums leading-none text-foreground sm:text-sm lg:text-base";
+  const stripLabelClass =
+    "max-w-[5.25rem] truncate text-center text-[0.58rem] font-medium leading-tight text-muted-foreground sm:max-w-[6.5rem] sm:text-[0.62rem]";
 
   if (loading) {
     return (
@@ -135,63 +224,104 @@ export default function PartidasPage() {
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card className="rounded-[2rem] border-border/70 bg-card/60 shadow-xl shadow-black/10">
-          <CardContent className="flex items-center gap-4 p-6">
-            <div className="flex size-12 items-center justify-center rounded-2xl border border-secondary/30 bg-secondary text-secondary-foreground">
-              <Swords className="size-5" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Total de partidas</p>
-              <p className="font-heading text-2xl font-semibold">{totalMatches}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-[2rem] border-border/70 bg-card/60 shadow-xl shadow-black/10">
-          <CardContent className="flex items-center gap-4 p-6">
-            <div className="flex size-12 items-center justify-center rounded-2xl border border-primary/30 bg-primary text-primary-foreground">
-              <Clock3 className="size-5" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Partidas abertas</p>
-              <p className="font-heading text-2xl font-semibold">{openMatches}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-[2rem] border-border/70 bg-card/60 shadow-xl shadow-black/10">
-          <CardContent className="flex items-center gap-4 p-6">
-            <div className="flex size-12 items-center justify-center rounded-2xl border border-border/70 bg-background/50 text-foreground">
-              <CalendarDays className="size-5" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Partidas fechadas</p>
-              <p className="font-heading text-2xl font-semibold">{closedMatches}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-[2rem] border-border/70 bg-card/60 shadow-xl shadow-black/10">
-          <CardContent className="flex items-center gap-4 p-6">
-            <div className="flex size-12 items-center justify-center rounded-2xl border border-border/70 bg-background/50 text-foreground">
-              <Users className="size-5" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Participações</p>
-              <p className="font-heading text-2xl font-semibold">{totalEntries}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </section>
+      <StatsStrip
+        items={[
+          {
+            title: "Total de partidas",
+            "aria-label": `Mostrar todas as partidas. Total: ${totalMatches}`,
+            icon: Swords,
+            tone: "stripTotal",
+            isActive: statusFilter === "all",
+            onClick: () => setStatusFilter("all"),
+            children: (
+              <>
+                <p className={stripValueClass}>{totalMatches}</p>
+                <p className={stripLabelClass}>Total</p>
+              </>
+            ),
+          },
+          {
+            title: "Abertas",
+            "aria-label": `Filtrar partidas abertas: ${openMatches}`,
+            icon: Clock3,
+            tone: "stripOpen",
+            isActive: statusFilter === "open",
+            onClick: () => setStatusFilter("open"),
+            children: (
+              <>
+                <p className={stripValueClass}>{openMatches}</p>
+                <p className={stripLabelClass}>Abertas</p>
+              </>
+            ),
+          },
+          {
+            title: "Em análise",
+            "aria-label": `Filtrar partidas em análise: ${inReviewMatches}`,
+            icon: Scale,
+            tone: "stripReview",
+            isActive: statusFilter === "in_review",
+            onClick: () => setStatusFilter("in_review"),
+            children: (
+              <>
+                <p className={stripValueClass}>{inReviewMatches}</p>
+                <p className={stripLabelClass}>Em análise</p>
+              </>
+            ),
+          },
+          {
+            title: "Em ajuste",
+            "aria-label": `Filtrar partidas em ajuste: ${inAdjustmentMatches}`,
+            icon: SlidersHorizontal,
+            tone: "stripAdjustment",
+            isActive: statusFilter === "in_adjustment",
+            onClick: () => setStatusFilter("in_adjustment"),
+            children: (
+              <>
+                <p className={stripValueClass}>{inAdjustmentMatches}</p>
+                <p className={stripLabelClass}>Em ajuste</p>
+              </>
+            ),
+          },
+          {
+            title: "Em pagamento",
+            "aria-label": `Filtrar partidas em pagamento: ${inPaymentMatches}`,
+            icon: Banknote,
+            tone: "stripPayment",
+            isActive: statusFilter === "in_payment",
+            onClick: () => setStatusFilter("in_payment"),
+            children: (
+              <>
+                <p className={stripValueClass}>{inPaymentMatches}</p>
+                <p className={stripLabelClass}>Em pagamento</p>
+              </>
+            ),
+          },
+          {
+            title: "Finalizadas",
+            "aria-label": `Filtrar partidas finalizadas: ${closedMatches}`,
+            icon: CheckCircle2,
+            tone: "stripClosed",
+            isActive: statusFilter === "closed",
+            onClick: () => setStatusFilter("closed"),
+            children: (
+              <>
+                <p className={stripValueClass}>{closedMatches}</p>
+                <p className={stripLabelClass}>Finalizadas</p>
+              </>
+            ),
+          },
+        ]}
+      />
 
       <Card className="rounded-[2rem] border-border/70 bg-card/60 shadow-xl shadow-black/10">
         <CardHeader className="flex flex-row items-center justify-between gap-4">
           <div>
-            <CardTitle className="font-heading text-2xl">Partidas do grupo</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Histórico das sessões registradas no grupo.
-            </p>
+            <CardTitle className="font-heading text-2xl">Partidas</CardTitle>
+            {session?.isAdmin ? (
+              <p className="mt-1 text-sm text-muted-foreground">
+                Como admin, você pode excluir uma partida na lista abaixo (botão ao lado de «Ver detalhes»).
+              </p>
+            ) : null}
           </div>
 
           <Button asChild className="rounded-full">
@@ -203,92 +333,213 @@ export default function PartidasPage() {
         </CardHeader>
 
         <CardContent>
+          {listFeedback && (
+            <div className="mb-4 rounded-2xl border border-border/70 bg-background/40 px-4 py-3 text-sm text-foreground">
+              {listFeedback}
+            </div>
+          )}
           {matches.length === 0 ? (
             <div className="rounded-2xl border border-border/70 bg-background/30 px-4 py-12 text-center text-sm text-muted-foreground">
               Nenhuma partida registrada ainda.
             </div>
+          ) : filteredMatches.length === 0 ? (
+            <div className="rounded-2xl border border-border/70 bg-background/30 px-4 py-12 text-center text-sm text-muted-foreground">
+              <p>Nenhuma partida com este status.</p>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-4 rounded-full"
+                onClick={() => setStatusFilter("all")}
+              >
+                Ver todas as partidas
+              </Button>
+            </div>
           ) : (
             <div className="space-y-4">
-              {matches.map((match) => (
-                <Link
-                  key={match.match_id}
-                  href={`/${groupCode}/partidas/${match.match_id}`}
-                  className="block rounded-3xl border border-border/70 bg-background/30 p-5 transition hover:border-secondary/40 hover:bg-background/40"
-                >
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-heading truncate text-xl font-semibold">
-                          {match.notes?.trim() || "Partida sem observação"}
-                        </h3>
-
-                        <span
+              {matchesPageSlice.map((match) => {
+                const open = matchDetailsOpen[match.match_id] ?? false;
+                return (
+                  <div
+                    key={match.match_id}
+                    className="rounded-3xl border border-border/70 bg-background/30 p-4 sm:p-5"
+                  >
+                    <div className="flex gap-2 sm:gap-3">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMatchDetailsOpen((prev) => ({
+                            ...prev,
+                            [match.match_id]: !open,
+                          }))
+                        }
+                        className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-card/50 text-muted-foreground transition hover:bg-card/80 hover:text-foreground"
+                        aria-expanded={open}
+                        aria-label={
+                          open ? "Ocultar detalhes da partida" : "Mostrar detalhes da partida"
+                        }
+                      >
+                        <ChevronDown
                           className={cn(
-                            "rounded-full px-2.5 py-1 text-xs font-medium uppercase tracking-wide",
-                            match.status === "open"
-                              ? "border border-primary/30 bg-primary/10 text-foreground"
-                              : "border border-secondary/30 bg-secondary text-secondary-foreground"
+                            "size-5 transition-transform duration-200",
+                            open && "rotate-180"
+                          )}
+                        />
+                      </button>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-heading min-w-0 flex-1 truncate text-lg font-semibold sm:text-xl">
+                            {match.notes?.trim() || "Partida sem observação"}
+                          </h3>
+
+                          <span
+                            className={cn(
+                              "shrink-0 rounded-full px-2.5 py-1 text-xs font-medium uppercase tracking-wide",
+                              matchStatusBadgeClassName(match.status)
+                            )}
+                          >
+                            {labelMatchStatus(match.status)}
+                          </span>
+                        </div>
+
+                        {open && (
+                          <div className="mt-4 grid w-full min-w-0 grid-cols-2 gap-2 sm:gap-3">
+                            <div className="min-w-0 rounded-2xl border border-border/70 bg-card/40 p-3">
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                Data
+                              </p>
+                              <p className="mt-1 break-words font-semibold leading-snug">
+                                {formatDate(match.played_at)}
+                              </p>
+                            </div>
+
+                            <div className="min-w-0 rounded-2xl border border-border/70 bg-card/40 p-3">
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                Criada por
+                              </p>
+                              <div className="mt-1 flex min-w-0 items-center gap-2">
+                                <PlayerAvatar
+                                  name={match.created_by_player_name}
+                                  photoUrl={match.created_by_photo_url}
+                                  size="sm"
+                                />
+                                <p className="min-w-0 truncate font-semibold">
+                                  {match.created_by_player_name}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="min-w-0 rounded-2xl border border-border/70 bg-card/40 p-3">
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                Participantes
+                              </p>
+                              <p className="mt-1 font-semibold">{match.total_entries}</p>
+                            </div>
+
+                            <div className="min-w-0 rounded-2xl border border-border/70 bg-card/40 p-3">
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                Buy-in total
+                              </p>
+                              <p className="mt-1 font-semibold">
+                                {formatCurrency(match.total_buy_in)}
+                              </p>
+                            </div>
+
+                            <div className="min-w-0 rounded-2xl border border-border/70 bg-card/40 p-3">
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                Cash-out total
+                              </p>
+                              <p className="mt-1 font-semibold">
+                                {formatCurrency(match.total_cash_out)}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        <div
+                          className={cn(
+                            "flex flex-wrap items-center justify-end gap-2",
+                            open ? "mt-4 border-t border-border/50 pt-3" : "mt-3"
                           )}
                         >
-                          {match.status === "open" ? "Aberta" : "Fechada"}
-                        </span>
-                      </div>
-
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                        <div className="rounded-2xl border border-border/70 bg-card/40 p-3">
-                          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                            Data
-                          </p>
-                          <p className="mt-1 font-semibold">
-                            {formatDate(match.played_at)}
-                          </p>
-                        </div>
-
-                        <div className="rounded-2xl border border-border/70 bg-card/40 p-3">
-                          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                            Criada por
-                          </p>
-                          <p className="mt-1 font-semibold">
-                            {match.created_by_player_name}
-                          </p>
-                        </div>
-
-                        <div className="rounded-2xl border border-border/70 bg-card/40 p-3">
-                          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                            Participantes
-                          </p>
-                          <p className="mt-1 font-semibold">{match.total_entries}</p>
-                        </div>
-
-                        <div className="rounded-2xl border border-border/70 bg-card/40 p-3">
-                          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                            Buy-in total
-                          </p>
-                          <p className="mt-1 font-semibold">
-                            {formatCurrency(match.total_buy_in)}
-                          </p>
-                        </div>
-
-                        <div className="rounded-2xl border border-border/70 bg-card/40 p-3">
-                          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                            Cash-out total
-                          </p>
-                          <p className="mt-1 font-semibold">
-                            {formatCurrency(match.total_cash_out)}
-                          </p>
+                          <Link
+                            href={`/${groupCode}/partidas/${match.match_id}`}
+                            className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition hover:text-foreground"
+                          >
+                            Ver detalhes
+                            <ArrowRight className="size-4" />
+                          </Link>
+                          {session?.isAdmin ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="rounded-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              disabled={deletingMatchId === match.match_id}
+                              onClick={() => void handleDeleteMatch(match.match_id)}
+                            >
+                              {deletingMatchId === match.match_id ? (
+                                <>
+                                  <Loader2 className="mr-2 size-4 animate-spin" />
+                                  Excluindo…
+                                </>
+                              ) : (
+                                <>
+                                  <Trash2 className="mr-2 size-4" />
+                                  Excluir partida
+                                </>
+                              )}
+                            </Button>
+                          ) : null}
                         </div>
                       </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 self-end text-sm font-medium text-muted-foreground lg:self-center">
-                      Ver detalhes
-                      <ArrowRight className="size-4" />
                     </div>
                   </div>
-                </Link>
-              ))}
+                );
+              })}
             </div>
           )}
+
+          {matches.length > 0 && filteredMatches.length > MATCHES_PAGE_SIZE ? (
+            <div className="mt-6 flex flex-col items-stretch gap-3 border-t border-border/60 pt-6 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-center text-sm text-muted-foreground sm:text-left">
+                Página {safeMatchesPage} de {totalMatchesPages}
+                <span className="max-sm:block max-sm:mt-0.5 sm:ml-1">
+                  (
+                  {statusFilter === "all"
+                    ? `${totalMatches} partidas no total`
+                    : `${filteredTotal} ${filteredTotal === 1 ? "partida" : "partidas"} neste filtro`}
+                  )
+                </span>
+              </p>
+              <div className="flex items-center justify-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full"
+                  disabled={safeMatchesPage <= 1}
+                  onClick={() => setMatchesPage((p) => Math.max(1, p - 1))}
+                  aria-label="Página anterior"
+                >
+                  <ChevronLeft className="mr-1 size-4" />
+                  Anterior
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full"
+                  disabled={safeMatchesPage >= totalMatchesPages}
+                  onClick={() =>
+                    setMatchesPage((p) => Math.min(totalMatchesPages, p + 1))
+                  }
+                  aria-label="Próxima página"
+                >
+                  Próxima
+                  <ChevronRight className="ml-1 size-4" />
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>
