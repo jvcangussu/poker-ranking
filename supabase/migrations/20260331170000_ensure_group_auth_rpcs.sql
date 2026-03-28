@@ -25,7 +25,7 @@ RETURNS TABLE(
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $function$
 DECLARE
   v_group_id uuid;
@@ -90,7 +90,7 @@ RETURNS TABLE(
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $function$
 BEGIN
   RETURN QUERY
@@ -128,7 +128,7 @@ CREATE OR REPLACE FUNCTION public.update_group_admin_password(
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $function$
 BEGIN
   IF p_new_password IS NULL OR length(trim(p_new_password)) < 4 THEN
@@ -162,7 +162,7 @@ RETURNS TABLE(
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
   SELECT g.id, g.code, g.name, g.created_at, g.updated_at
   FROM public.groups g
@@ -180,7 +180,7 @@ RETURNS TABLE(
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
   SELECT g.id, g.code, g.name, g.created_at, g.updated_at
   FROM public.groups g
@@ -196,7 +196,7 @@ RETURNS TABLE(
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
   SELECT p.id, p.name, p.is_admin
   FROM public.groups g
