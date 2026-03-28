@@ -12,7 +12,7 @@ RETURNS character varying(6)
 LANGUAGE plpgsql
 VOLATILE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
   v_code varchar(6);
@@ -52,7 +52,7 @@ RETURNS TABLE(
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $function$
 DECLARE
   v_group_id uuid;

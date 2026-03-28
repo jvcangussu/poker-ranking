@@ -18,7 +18,7 @@ RETURNS TABLE(
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $function$
 BEGIN
   RETURN QUERY
@@ -56,7 +56,7 @@ CREATE OR REPLACE FUNCTION public.update_group_admin_password(
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $function$
 BEGIN
   IF p_new_password IS NULL OR length(trim(p_new_password)) < 4 THEN
