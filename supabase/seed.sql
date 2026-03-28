@@ -1,0 +1,1 @@
+-- Sem dados de seed; arquivo presente para `supabase db reset` (config em config.toml).

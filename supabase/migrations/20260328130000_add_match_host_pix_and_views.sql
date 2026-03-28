@@ -46,7 +46,11 @@ begin
 end;
 $function$;
 
-CREATE OR REPLACE VIEW public.v_match_summary AS
+-- CREATE OR REPLACE não pode remover colunas da view se o banco já tiver versão mais nova.
+DROP VIEW IF EXISTS public.v_match_summary CASCADE;
+DROP VIEW IF EXISTS public.v_match_entries_detailed CASCADE;
+
+CREATE VIEW public.v_match_summary AS
  SELECT m.id AS match_id,
     m.group_id,
     g.code AS group_code,
@@ -67,7 +71,7 @@ CREATE OR REPLACE VIEW public.v_match_summary AS
      LEFT JOIN match_entries me ON ((me.match_id = m.id)))
   GROUP BY m.id, m.group_id, g.code, g.name, m.created_by_player_id, cp.name, m.status, m.notes, m.played_at, m.host_pix_key;
 
-CREATE OR REPLACE VIEW public.v_match_entries_detailed AS
+CREATE VIEW public.v_match_entries_detailed AS
  SELECT me.id AS entry_id,
     me.match_id,
     m.group_id,

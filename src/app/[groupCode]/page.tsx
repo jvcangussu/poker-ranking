@@ -69,17 +69,16 @@ export default function GroupAccessPage() {
 
         setGroup(groupData);
 
-        const { data: playersData, error: playersError } = await supabase
-          .from("players")
-          .select("id, name, is_admin")
-          .eq("group_id", groupData.id)
-          .order("name", { ascending: true });
+        const { data: playersData, error: playersError } = await supabase.rpc(
+          "list_players_for_group_login",
+          { p_group_code: groupCode }
+        );
 
         if (playersError) {
           throw playersError;
         }
 
-        const normalizedPlayers = playersData ?? [];
+        const normalizedPlayers = (playersData ?? []) as PlayerBasic[];
         setPlayers(normalizedPlayers);
 
         if (normalizedPlayers.length > 0) {

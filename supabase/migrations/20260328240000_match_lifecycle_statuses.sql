@@ -824,7 +824,9 @@ BEGIN
 END;
 $function$;
 
-CREATE OR REPLACE VIEW public.v_match_entries_detailed AS
+DROP VIEW IF EXISTS public.v_match_entries_detailed CASCADE;
+
+CREATE VIEW public.v_match_entries_detailed AS
 SELECT
   me.id AS entry_id,
   me.match_id,
