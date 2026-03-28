@@ -1,6 +1,9 @@
 -- Expõe foto do perfil (players.photo_url) nas views usadas pelo app.
 
-CREATE OR REPLACE VIEW public.v_match_entries_detailed AS
+DROP VIEW IF EXISTS public.v_match_summary CASCADE;
+DROP VIEW IF EXISTS public.v_match_entries_detailed CASCADE;
+
+CREATE VIEW public.v_match_entries_detailed AS
 SELECT
   me.id AS entry_id,
   me.match_id,
@@ -26,7 +29,7 @@ JOIN public.matches m ON m.id = me.match_id
 JOIN public.groups g ON g.id = m.group_id
 JOIN public.players p ON p.id = me.player_id;
 
-CREATE OR REPLACE VIEW public.v_match_summary AS
+CREATE VIEW public.v_match_summary AS
 SELECT
   m.id AS match_id,
   m.group_id,

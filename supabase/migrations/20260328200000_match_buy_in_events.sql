@@ -201,7 +201,9 @@ begin
 end;
 $function$;
 
-CREATE OR REPLACE VIEW public.v_match_summary AS
+DROP VIEW IF EXISTS public.v_match_summary CASCADE;
+
+CREATE VIEW public.v_match_summary AS
  SELECT m.id AS match_id,
     m.group_id,
     g.code AS group_code,

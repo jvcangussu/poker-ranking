@@ -1,4 +1,5 @@
--- Senha separada para administradores: grupo (todos) + admin (só quem é admin no login).
+-- Consolida e garante RPCs de grupo/login no PostgREST (corrige 404 em /rpc/verify_group_access e afins
+-- quando migrações anteriores não foram aplicadas no projeto remoto). Idempotente: CREATE OR REPLACE + GRANT.
 
 ALTER TABLE public.groups ADD COLUMN IF NOT EXISTS admin_password_hash text;
 
@@ -8,8 +9,6 @@ WHERE admin_password_hash IS NULL;
 
 DROP FUNCTION IF EXISTS public.create_group_with_admin(text, text, text);
 DROP FUNCTION IF EXISTS public.verify_group_access(character varying, text, text);
-DROP FUNCTION IF EXISTS public.verify_group_access(character varying, text, text, text);
-DROP FUNCTION IF EXISTS public.update_group_admin_password(uuid, text);
 
 CREATE OR REPLACE FUNCTION public.create_group_with_admin(
   p_group_name text,
@@ -105,26 +104,28 @@ BEGIN
     (
       (g.password_hash = crypt(p_group_password, g.password_hash))
       AND (
-        NOT p.is_admin
-        OR (
-          g.admin_password_hash IS NOT NULL
-          AND length(trim(COALESCE(p_admin_password, ''))) > 0
-          AND g.admin_password_hash = crypt(trim(p_admin_password), g.admin_password_hash)
-        )
+        CASE
+          WHEN NOT COALESCE(p.is_admin, false) THEN true
+          WHEN g.admin_password_hash IS NULL THEN false
+          WHEN p_admin_password IS NULL OR length(trim(p_admin_password)) = 0 THEN false
+          ELSE g.admin_password_hash = crypt(trim(p_admin_password), g.admin_password_hash)
+        END
       )
     ) AS access_granted
   FROM public.groups g
   JOIN public.players p ON p.group_id = g.id
-  WHERE g.code = p_group_code
-    AND p.name = p_player_name;
+  WHERE lower(btrim(g.code::text)) = lower(btrim(p_group_code::text))
+    AND p.name = trim(p_player_name);
 END;
 $function$;
+
+DROP FUNCTION IF EXISTS public.update_group_admin_password(uuid, text);
 
 CREATE OR REPLACE FUNCTION public.update_group_admin_password(
   p_group_id uuid,
   p_new_password text
 )
-RETURNS boolean
+RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
@@ -140,9 +141,69 @@ BEGIN
     updated_at = now()
   WHERE id = p_group_id;
 
-  RETURN true;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Grupo não encontrado.';
+  END IF;
 END;
 $function$;
+
+DROP FUNCTION IF EXISTS public.get_group_public_by_code(character varying);
+DROP FUNCTION IF EXISTS public.get_group_public_by_id(uuid);
+DROP FUNCTION IF EXISTS public.list_players_for_group_login(character varying);
+
+CREATE OR REPLACE FUNCTION public.get_group_public_by_code(p_group_code character varying)
+RETURNS TABLE(
+  id uuid,
+  code character varying,
+  name text,
+  created_at timestamptz,
+  updated_at timestamptz
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT g.id, g.code, g.name, g.created_at, g.updated_at
+  FROM public.groups g
+  WHERE lower(btrim(g.code::text)) = lower(btrim(p_group_code::text));
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_group_public_by_id(p_group_id uuid)
+RETURNS TABLE(
+  id uuid,
+  code character varying,
+  name text,
+  created_at timestamptz,
+  updated_at timestamptz
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT g.id, g.code, g.name, g.created_at, g.updated_at
+  FROM public.groups g
+  WHERE g.id = p_group_id;
+$$;
+
+CREATE OR REPLACE FUNCTION public.list_players_for_group_login(p_group_code character varying)
+RETURNS TABLE(
+  id uuid,
+  name text,
+  is_admin boolean
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT p.id, p.name, p.is_admin
+  FROM public.groups g
+  INNER JOIN public.players p ON p.group_id = g.id
+  WHERE lower(btrim(g.code::text)) = lower(btrim(p_group_code::text))
+  ORDER BY p.name ASC;
+$$;
 
 GRANT EXECUTE ON FUNCTION public.create_group_with_admin(text, text, text, text) TO anon;
 GRANT EXECUTE ON FUNCTION public.create_group_with_admin(text, text, text, text) TO authenticated;
@@ -155,3 +216,15 @@ GRANT EXECUTE ON FUNCTION public.verify_group_access(character varying, text, te
 GRANT EXECUTE ON FUNCTION public.update_group_admin_password(uuid, text) TO anon;
 GRANT EXECUTE ON FUNCTION public.update_group_admin_password(uuid, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.update_group_admin_password(uuid, text) TO service_role;
+
+GRANT EXECUTE ON FUNCTION public.get_group_public_by_code(character varying) TO anon;
+GRANT EXECUTE ON FUNCTION public.get_group_public_by_code(character varying) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_group_public_by_code(character varying) TO service_role;
+
+GRANT EXECUTE ON FUNCTION public.get_group_public_by_id(uuid) TO anon;
+GRANT EXECUTE ON FUNCTION public.get_group_public_by_id(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_group_public_by_id(uuid) TO service_role;
+
+GRANT EXECUTE ON FUNCTION public.list_players_for_group_login(character varying) TO anon;
+GRANT EXECUTE ON FUNCTION public.list_players_for_group_login(character varying) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.list_players_for_group_login(character varying) TO service_role;
