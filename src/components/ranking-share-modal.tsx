@@ -1,6 +1,5 @@
 "use client";
 
-import { toPng } from "html-to-image";
 import { Download, Loader2, Share2, X } from "lucide-react";
 import {
   useCallback,
@@ -13,6 +12,7 @@ import {
 import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
+import { captureShareCardToPng } from "@/lib/share-capture-png";
 import { cn } from "@/lib/utils";
 import type { RankMovementDisplay } from "@/lib/ranking-rank-movement";
 
@@ -198,15 +198,11 @@ export function RankingShareModal({
   const captureRankingPng = useCallback(async (): Promise<string> => {
     const node = cardRef.current;
     if (!node) throw new Error("Card indisponível");
-    return toPng(node, {
+    return captureShareCardToPng(node, {
       width: EXPORT_W,
       height: EXPORT_H,
       pixelRatio: EXPORT_PIXEL_RATIO,
-      cacheBust: true,
       backgroundColor: FALLBACK_BG,
-      style: {
-        transform: "none",
-      },
     });
   }, []);
 
