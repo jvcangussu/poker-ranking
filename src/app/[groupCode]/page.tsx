@@ -132,12 +132,24 @@ export default function GroupAccessPage() {
     try {
       setSubmitting(true);
 
-      const { data, error } = await supabase.rpc("verify_group_access", {
+      const verifyPayload: {
+        p_group_code: string;
+        p_player_name: string;
+        p_group_password: string;
+        p_admin_password?: string;
+      } = {
         p_group_code: group.code,
         p_player_name: selectedPlayerName,
         p_group_password: groupPassword,
-        p_admin_password: needsAdminPassword ? adminPassword : "",
-      });
+      };
+      if (needsAdminPassword) {
+        verifyPayload.p_admin_password = adminPassword.trim();
+      }
+
+      const { data, error } = await supabase.rpc(
+        "verify_group_access",
+        verifyPayload
+      );
 
       if (error) {
         throw error;
