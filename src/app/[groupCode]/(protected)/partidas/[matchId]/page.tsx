@@ -45,6 +45,7 @@ import {
   chipCountsToJsonObject,
   type ChipDenomination,
 } from "@/lib/chip-denominations";
+import { getSupabaseRpcErrorMessage } from "@/lib/supabase-error-message";
 import { cn } from "@/lib/utils";
 import {
   isMatchStatus,
@@ -646,7 +647,7 @@ export default function MatchDetailsPage() {
       await loadData(session);
     } catch (err) {
       setPageError(
-        err instanceof Error ? err.message : "Erro ao validar os valores."
+        getSupabaseRpcErrorMessage(err, "Erro ao validar os valores.")
       );
     } finally {
       setValidatingMatch(false);

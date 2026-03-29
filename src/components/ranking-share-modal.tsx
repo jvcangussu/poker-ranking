@@ -227,43 +227,44 @@ export function RankingShareModal({
 
       const nav = typeof navigator !== "undefined" ? navigator : undefined;
       const hasShare = typeof nav?.share === "function";
-      let shareAttempted = false;
 
-      if (hasShare) {
-        try {
-          shareAttempted = true;
-          await nav!.share({ files: [file] });
-          setShareHint("Escolha Instagram ou Story na lista.");
-          return;
-        } catch (err) {
-          if ((err as Error).name === "AbortError") return;
-        }
-        try {
-          await nav!.share({ files: [file], title: APP_MARK });
-          setShareHint("Escolha Instagram na lista.");
-          return;
-        } catch (err) {
-          if ((err as Error).name === "AbortError") return;
-        }
+      if (!hasShare) {
+        setShareHint(
+          "Este navegador não oferece Compartilhar com arquivo. Use «Só salvar PNG» e envie pelo Instagram."
+        );
+        return;
       }
 
-      triggerDownload(dataUrl, baseName);
-      if (shareAttempted && !isSecureShareContext()) {
+      try {
+        await nav!.share({ files: [file] });
+        setShareHint("Escolha Instagram ou Story na lista.");
+        return;
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+      }
+      try {
+        await nav!.share({ files: [file], title: APP_MARK });
+        setShareHint("Escolha Instagram na lista.");
+        return;
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+      }
+
+      if (!isSecureShareContext()) {
         setShareHint(
-          "Em http:// pelo IP da rede o compartilhar com foto costuma ser bloqueado. Use a imagem salva no Instagram pela galeria, ou teste com HTTPS (deploy ou ngrok) para abrir o menu Compartilhar."
+          "Compartilhar com foto costuma falhar em HTTP. Abra o site em HTTPS ou use «Só salvar PNG»."
         );
       } else {
         setShareHint(
-          "Imagem salva. Abra o Instagram e use a foto na galeria (Downloads). No iOS, Safari costuma ser o melhor para Compartilhar → Instagram."
+          "Não foi possível abrir o compartilhamento. Tente de novo ou use «Só salvar PNG»."
         );
       }
-      window.open("https://www.instagram.com/", "_blank", "noopener,noreferrer");
     } catch {
       setShareHint("Não foi possível gerar a imagem. Tente de novo.");
     } finally {
       setExporting(false);
     }
-  }, [buildFileBaseName, captureRankingPng, triggerDownload]);
+  }, [buildFileBaseName, captureRankingPng]);
 
   const handleDownload = useCallback(async () => {
     setShareHint(null);
