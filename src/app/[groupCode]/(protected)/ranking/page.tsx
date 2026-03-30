@@ -349,7 +349,7 @@ export default function RankingPage() {
                 onClick={() => setShareRankingOpen(true)}
               >
                 <Share2 className="mr-2 size-4" />
-                Post Instagram
+                Compartilhar
               </Button>
               <Button asChild className="rounded-full">
                 <Link href={`/${groupCode}/partidas/nova`}>

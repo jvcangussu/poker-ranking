@@ -45,6 +45,7 @@ import {
   chipCountsToJsonObject,
   type ChipDenomination,
 } from "@/lib/chip-denominations";
+import { getSupabaseRpcErrorMessage } from "@/lib/supabase-error-message";
 import { cn } from "@/lib/utils";
 import {
   isMatchStatus,
@@ -636,6 +637,27 @@ export default function MatchDetailsPage() {
       setValidatingMatch(true);
       setPageError(null);
 
+      const { data: freshSummary, error: freshErr } = await supabase
+        .from("v_match_summary")
+        .select("status")
+        .eq("match_id", match.match_id)
+        .eq("group_id", session.groupId)
+        .maybeSingle();
+
+      if (freshErr) throw freshErr;
+
+      const liveStatus = freshSummary?.status;
+      if (
+        liveStatus !== "in_review" &&
+        liveStatus !== "in_adjustment"
+      ) {
+        setPageError(
+          `Não é possível validar agora: o estado da partida é «${labelMatchStatus(liveStatus)}». Só vale em «Em análise» ou «Em ajuste» (atualize a página se o fluxo mudou).`
+        );
+        await loadData(session);
+        return;
+      }
+
       const { error } = await supabase.rpc("host_validate_match_totals", {
         p_match_id: match.match_id,
         p_actor_player_id: session.playerId,
@@ -646,7 +668,7 @@ export default function MatchDetailsPage() {
       await loadData(session);
     } catch (err) {
       setPageError(
-        err instanceof Error ? err.message : "Erro ao validar os valores."
+        getSupabaseRpcErrorMessage(err, "Erro ao validar os valores.")
       );
     } finally {
       setValidatingMatch(false);
@@ -1569,7 +1591,7 @@ export default function MatchDetailsPage() {
                               onClick={() => setShareEntry(entry)}
                             >
                               <Share2 className="size-3.5 shrink-0" aria-hidden />
-                              Post Instagram
+                              Compartilhar
                             </Button>
                           </div>
                         )}

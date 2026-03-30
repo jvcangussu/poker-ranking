@@ -13,6 +13,10 @@ import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { captureShareCardToPng } from "@/lib/share-capture-png";
+import {
+  isSecureShareContext,
+  sharePngNative,
+} from "@/lib/share-png-native";
 import { cn } from "@/lib/utils";
 
 import type { MatchSummaryRow } from "@/types/database";
@@ -31,11 +35,6 @@ const EXPORT_PIXEL_RATIO = 1;
 
 function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   return fetch(dataUrl).then((r) => r.blob());
-}
-
-function isSecureShareContext(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.isSecureContext === true;
 }
 
 function buildShareablePngFile(blob: Blob, filename: string): File {
@@ -201,7 +200,7 @@ export function MatchResultShareModal({
     []
   );
 
-  const handlePostInstagram = useCallback(async () => {
+  const handleShareImage = useCallback(async () => {
     setShareHint(null);
     setExporting(true);
     try {
@@ -210,45 +209,37 @@ export function MatchResultShareModal({
       const blob = await dataUrlToBlob(dataUrl);
       const file = buildShareablePngFile(blob, `${baseName}.png`);
 
-      const nav = typeof navigator !== "undefined" ? navigator : undefined;
-      const hasShare = typeof nav?.share === "function";
-      let shareAttempted = false;
+      const result = await sharePngNative(file, { appMark: APP_MARK });
 
-      if (hasShare) {
-        try {
-          shareAttempted = true;
-          await nav!.share({ files: [file] });
-          setShareHint("Escolha Instagram ou Story na lista.");
-          return;
-        } catch (err) {
-          if ((err as Error).name === "AbortError") return;
-        }
-        try {
-          await nav!.share({ files: [file], title: APP_MARK });
-          setShareHint("Escolha Instagram na lista.");
-          return;
-        } catch (err) {
-          if ((err as Error).name === "AbortError") return;
-        }
+      if (result === "shared") {
+        setShareHint("Escolha o app para enviar (Instagram, WhatsApp, Fotos…).");
+        return;
+      }
+      if (result === "aborted") {
+        return;
+      }
+      if (result === "no_share_api") {
+        setShareHint(
+          "Este ambiente não oferece o menu Compartilhar com arquivo. Use «Salvar PNG»."
+        );
+        return;
       }
 
-      triggerDownload(dataUrl, baseName);
-      if (shareAttempted && !isSecureShareContext()) {
+      if (!isSecureShareContext()) {
         setShareHint(
-          "Em http:// pelo IP da rede o compartilhar com foto costuma ser bloqueado. Use a imagem salva no Instagram pela galeria, ou teste com HTTPS (deploy ou ngrok) para abrir o menu Compartilhar."
+          "Compartilhar com arquivo costuma falhar em HTTP. Abra o site em HTTPS ou use «Salvar PNG»."
         );
       } else {
         setShareHint(
-          "Imagem salva. Abra o Instagram e use a foto na galeria (Downloads). No iOS, Safari costuma ser o melhor para Compartilhar → Instagram."
+          "Não foi possível abrir o compartilhamento. Tente de novo ou use «Salvar PNG»."
         );
       }
-      window.open("https://www.instagram.com/", "_blank", "noopener,noreferrer");
     } catch {
       setShareHint("Não foi possível gerar a imagem. Tente de novo.");
     } finally {
       setExporting(false);
     }
-  }, [buildFileBaseName, captureRankingPng, triggerDownload]);
+  }, [buildFileBaseName, captureRankingPng]);
 
   const handleDownload = useCallback(async () => {
     setShareHint(null);
@@ -602,7 +593,7 @@ export function MatchResultShareModal({
             type="button"
             className="h-12 rounded-full gap-2 bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white hover:from-fuchsia-500 hover:to-pink-500"
             disabled={exporting}
-            onClick={() => void handlePostInstagram()}
+            onClick={() => void handleShareImage()}
           >
             {exporting ? (
               <>
@@ -612,7 +603,7 @@ export function MatchResultShareModal({
             ) : (
               <>
                 <Share2 className="size-4" />
-                Postar no Instagram
+                Compartilhar imagem
               </>
             )}
           </Button>
@@ -624,7 +615,7 @@ export function MatchResultShareModal({
             onClick={() => void handleDownload()}
           >
             <Download className="size-4" />
-            Só salvar PNG
+            Salvar PNG
           </Button>
         </div>
       </footer>
