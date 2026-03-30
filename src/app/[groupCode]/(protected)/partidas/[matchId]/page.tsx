@@ -1570,7 +1570,7 @@ export default function MatchDetailsPage() {
                               onClick={() => setShareEntry(entry)}
                             >
                               <Share2 className="size-3.5 shrink-0" aria-hidden />
-                              Post Instagram
+                              Compartilhar
                             </Button>
                           </div>
                         )}
