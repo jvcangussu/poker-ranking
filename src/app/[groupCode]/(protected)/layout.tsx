@@ -10,6 +10,7 @@ import {
   Swords,
   Settings,
   Shield,
+  Wrench,
   LogOut,
   Loader2,
   Menu,
@@ -95,6 +96,11 @@ export default function GroupLayout({
       href: `/${groupCode}/configuracoes`,
       label: "Configurações",
       icon: Settings,
+    },
+    {
+      href: `/${groupCode}/utilities`,
+      label: "Utilities",
+      icon: Wrench,
     },
   ];
 
