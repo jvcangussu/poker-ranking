@@ -108,6 +108,8 @@ type RankingShareModalProps = {
   ranking: GroupRankingRow[];
   movements: Map<string, RankMovementDisplay>;
   lastClosedMatchPlayedAt: string | null;
+  periodTitle?: string;
+  periodSubtitle?: string | null;
 };
 
 function rankMedal(rank: number) {
@@ -132,6 +134,8 @@ export function RankingShareModal({
   ranking,
   movements,
   lastClosedMatchPlayedAt,
+  periodTitle = "Ranking acumulado",
+  periodSubtitle = null,
 }: RankingShareModalProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -369,7 +373,7 @@ export function RankingShareModal({
                       density === "relaxed" && "text-[22px]"
                     )}
                   >
-                    Ranking acumulado
+                    {periodTitle}
                   </p>
                   <p
                     className={cn(
@@ -395,6 +399,16 @@ export function RankingShareModal({
                       dateStyle: "long",
                     }).format(new Date())}
                   </p>
+                  {periodSubtitle ? (
+                    <p
+                      className={cn(
+                        "mt-1 max-w-[92%] text-zinc-300",
+                        density === "ultra" ? "text-[13px]" : "text-[14px]"
+                      )}
+                    >
+                      {periodSubtitle}
+                    </p>
+                  ) : null}
                   {showVarColumn && lastClosedMatchPlayedAt && (
                     <p
                       className={cn(
