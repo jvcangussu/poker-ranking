@@ -19,6 +19,12 @@ import { PlayerAvatar } from "@/components/player-avatar";
 import { StatsStrip } from "@/components/stats-strip";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  buildRankingForPeriod,
+  formatRankingWeekLabel,
+  getRecentRankingMonthOptions,
+  getRankingWeekRange,
+} from "@/lib/ranking-periods";
 import { supabase } from "@/lib/supabase/client";
 import { computeRankMovements } from "@/lib/ranking-rank-movement";
 import { cn } from "@/lib/utils";
@@ -26,7 +32,11 @@ import { labelMatchStatus, matchStatusBadgeClassName } from "@/lib/match-status"
 
 import type { PokerSession } from "@/types/session";
 import type { GroupRankingRow } from "@/types/database";
+import type { MatchEntryDetailedRow } from "@/types/database";
 import type { MatchSummaryRow } from "@/types/database";
+import type { RankingMatchMeta } from "@/lib/ranking-periods";
+import type { RankingMonthOption } from "@/lib/ranking-periods";
+import type { RankingPeriodMode } from "@/lib/ranking-periods";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -42,6 +52,17 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatDateOnly(value: Date) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+  }).format(value);
+}
+
+function capitalize(value: string) {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 const RANKING_RECENT_MATCHES_LIMIT = 5;
 
 export default function RankingPage() {
@@ -54,15 +75,11 @@ export default function RankingPage() {
   const groupCode = useMemo(() => (rawGroupCode ?? "").toLowerCase(), [rawGroupCode]);
 
   const [session, setSession] = useState<PokerSession | null>(null);
-  const [ranking, setRanking] = useState<GroupRankingRow[]>([]);
+  const [entries, setEntries] = useState<MatchEntryDetailedRow[]>([]);
+  const [rankingMatches, setRankingMatches] = useState<RankingMatchMeta[]>([]);
   const [recentMatches, setRecentMatches] = useState<MatchSummaryRow[]>([]);
-  const [lastClosedMatchPlayedAt, setLastClosedMatchPlayedAt] = useState<
-    string | null
-  >(null);
-  const [lastClosedProfits, setLastClosedProfits] = useState<Map<
-    string,
-    number
-  > | null>(null);
+  const [rankingMode, setRankingMode] = useState<RankingPeriodMode>("all");
+  const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
 
   const [shareRankingOpen, setShareRankingOpen] = useState(false);
 
@@ -101,85 +118,37 @@ export default function RankingPage() {
       try {
         setLoading(true);
         setError(null);
-        setLastClosedMatchPlayedAt(null);
-        setLastClosedProfits(null);
 
         const [
-          { data: rankingData, error: rankingError },
+          { data: entriesData, error: entriesError },
           { data: matchData, error: matchError },
-          { data: playersPhotoData, error: playersPhotoError },
         ] = await Promise.all([
           supabase
-            .from("v_group_ranking")
+            .from("v_match_entries_detailed")
             .select("*")
-            .eq("group_id", session.groupId)
-            .order("total_profit", { ascending: false }),
+            .eq("group_id", session.groupId),
           supabase
             .from("v_match_summary")
             .select("*")
             .eq("group_id", session.groupId)
             .order("played_at", { ascending: false })
-            .limit(RANKING_RECENT_MATCHES_LIMIT),
-          supabase
-            .from("players")
-            .select("id, photo_url")
-            .eq("group_id", session.groupId),
         ]);
 
-        if (rankingError) throw rankingError;
+        if (entriesError) throw entriesError;
         if (matchError) throw matchError;
-        if (playersPhotoError) throw playersPhotoError;
 
-        const photoByPlayer = new Map(
-          (playersPhotoData ?? []).map((p) => [p.id, p.photo_url as string | null])
-        );
-        setRanking(
-          (rankingData ?? []).map((row) => ({
-            ...(row as GroupRankingRow),
-            photo_url: photoByPlayer.get((row as GroupRankingRow).player_id) ?? null,
+        const allMatches = (matchData ?? []) as MatchSummaryRow[];
+
+        setEntries((entriesData ?? []) as MatchEntryDetailedRow[]);
+        setRankingMatches(
+          allMatches.map((row) => ({
+            matchId: row.match_id,
+            createdAt: row.created_at || row.played_at,
+            playedAt: row.played_at,
+            status: row.status,
           }))
         );
-        setRecentMatches(
-          (matchData ?? []).map((row) => {
-            const m = row as MatchSummaryRow;
-            const merged =
-              m.created_by_photo_url?.trim() ||
-              photoByPlayer.get(m.created_by_player_id) ||
-              null;
-            return { ...m, created_by_photo_url: merged };
-          })
-        );
-
-        const { data: lastClosedRow } = await supabase
-          .from("v_match_summary")
-          .select("match_id, played_at")
-          .eq("group_id", session.groupId)
-          .eq("status", "closed")
-          .order("played_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (lastClosedRow?.match_id) {
-          const { data: entryRows, error: entriesErr } = await supabase
-            .from("match_entries")
-            .select("player_id, profit")
-            .eq("match_id", lastClosedRow.match_id);
-
-          if (entriesErr) throw entriesErr;
-
-          setLastClosedMatchPlayedAt(lastClosedRow.played_at);
-          setLastClosedProfits(
-            new Map(
-              (entryRows ?? []).map((row) => [
-                row.player_id as string,
-                Number(row.profit),
-              ])
-            )
-          );
-        } else {
-          setLastClosedMatchPlayedAt(null);
-          setLastClosedProfits(null);
-        }
+        setRecentMatches(allMatches.slice(0, RANKING_RECENT_MATCHES_LIMIT));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Erro ao carregar o ranking.");
       } finally {
@@ -189,6 +158,93 @@ export default function RankingPage() {
 
     loadRanking();
   }, [session]);
+
+  const monthOptions = useMemo<RankingMonthOption[]>(
+    () => getRecentRankingMonthOptions(rankingMatches),
+    [rankingMatches]
+  );
+
+  useEffect(() => {
+    if (rankingMode !== "month") return;
+
+    if (monthOptions.length === 0) {
+      setSelectedMonthKey(null);
+      return;
+    }
+
+    if (!selectedMonthKey || !monthOptions.some((option) => option.value === selectedMonthKey)) {
+      setSelectedMonthKey(monthOptions[0].value);
+    }
+  }, [monthOptions, rankingMode, selectedMonthKey]);
+
+  const activeMonthKey =
+    rankingMode === "month" ? (selectedMonthKey ?? monthOptions[0]?.value ?? null) : null;
+
+  const {
+    ranking,
+    lastClosedProfits,
+    lastClosedMatchPlayedAt,
+  } = useMemo(() => {
+    if (!session) {
+      return {
+        ranking: [] as GroupRankingRow[],
+        lastClosedProfits: null as Map<string, number> | null,
+        lastClosedMatchPlayedAt: null as string | null,
+      };
+    }
+
+    return buildRankingForPeriod({
+      entries,
+      matches: rankingMatches,
+      groupCode: session.groupCode,
+      groupName: session.groupName,
+      mode: rankingMode,
+      monthKey: activeMonthKey,
+    });
+  }, [activeMonthKey, entries, rankingMatches, rankingMode, session]);
+
+  const activeMonthOption = useMemo(
+    () => monthOptions.find((option) => option.value === activeMonthKey) ?? null,
+    [activeMonthKey, monthOptions]
+  );
+
+  const weeklyRange = useMemo(() => getRankingWeekRange(), []);
+
+  const rankingDescription = useMemo(() => {
+    if (rankingMode === "all") {
+      return "Acumulado com todas as partidas do grupo que entram no ranking.";
+    }
+
+    if (rankingMode === "week") {
+      return `Partidas criadas entre ${formatDateOnly(weeklyRange.start)} e ${formatDateOnly(
+        weeklyRange.endInclusive
+      )}.`;
+    }
+
+    if (!activeMonthOption) {
+      return "Nenhum mês com partidas elegíveis para o ranking.";
+    }
+
+    return `Partidas criadas em ${capitalize(activeMonthOption.label)}.`;
+  }, [activeMonthOption, rankingMode, weeklyRange.endInclusive, weeklyRange.start]);
+
+  const sharePeriodTitle = useMemo(() => {
+    if (rankingMode === "week") return "Ranking semanal";
+    if (rankingMode === "month") return "Ranking mensal";
+    return "Ranking geral";
+  }, [rankingMode]);
+
+  const sharePeriodSubtitle = useMemo(() => {
+    if (rankingMode === "week") {
+      return `Semana atual · ${formatRankingWeekLabel()}`;
+    }
+
+    if (rankingMode === "month" && activeMonthOption) {
+      return capitalize(activeMonthOption.label);
+    }
+
+    return "Acumulado geral do grupo";
+  }, [activeMonthOption, rankingMode]);
 
   const totalPlayers = ranking.length;
   const topPlayer = ranking[0] ?? null;
@@ -338,6 +394,58 @@ export default function RankingPage() {
           <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4">
             <div>
               <CardTitle className="font-heading text-2xl">Ranking</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">{rankingDescription}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={rankingMode === "all" ? "default" : "outline"}
+                  className="rounded-full"
+                  onClick={() => setRankingMode("all")}
+                >
+                  Geral
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={rankingMode === "month" ? "default" : "outline"}
+                  className="rounded-full"
+                  onClick={() => setRankingMode("month")}
+                  disabled={monthOptions.length === 0}
+                >
+                  Mensal
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={rankingMode === "week" ? "default" : "outline"}
+                  className="rounded-full"
+                  onClick={() => setRankingMode("week")}
+                >
+                  Semanal
+                </Button>
+                {rankingMode === "month" ? (
+                  <label className="flex items-center gap-2 rounded-full border border-border/70 bg-background/40 px-3 py-1.5 text-sm text-muted-foreground">
+                    <span className="whitespace-nowrap">Período</span>
+                    <select
+                      value={activeMonthKey ?? ""}
+                      onChange={(event) => setSelectedMonthKey(event.target.value || null)}
+                      className="bg-transparent text-foreground outline-none"
+                      disabled={monthOptions.length === 0}
+                    >
+                      {monthOptions.length === 0 ? (
+                        <option value="">Sem meses disponíveis</option>
+                      ) : (
+                        monthOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {capitalize(option.label)}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </label>
+                ) : null}
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -363,7 +471,11 @@ export default function RankingPage() {
           <CardContent>
             {ranking.length === 0 ? (
               <div className="rounded-2xl border border-border/70 bg-background/30 px-4 py-10 text-center text-sm text-muted-foreground">
-                Ainda não há dados suficientes para exibir o ranking.
+                {rankingMode === "month"
+                  ? "Ainda não há partidas elegíveis para o mês selecionado."
+                  : rankingMode === "week"
+                    ? "Ainda não há partidas elegíveis para a semana atual."
+                    : "Ainda não há dados suficientes para exibir o ranking."}
               </div>
             ) : (
               <>
@@ -557,6 +669,8 @@ export default function RankingPage() {
           ranking={ranking}
           movements={rankingMovements}
           lastClosedMatchPlayedAt={lastClosedMatchPlayedAt}
+          periodTitle={sharePeriodTitle}
+          periodSubtitle={sharePeriodSubtitle}
         />
       )}
     </div>

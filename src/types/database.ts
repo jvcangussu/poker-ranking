@@ -75,6 +75,7 @@ export type MatchSummaryRow = {
   created_by_photo_url?: string | null;
   status: MatchStatusDb;
   notes: string | null;
+  created_at: string;
   played_at: string;
   total_entries: number;
   total_buy_in: number;
