@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
+  ArrowDownUp,
   ArrowLeft,
   BadgeCheck,
   Banknote,
@@ -45,6 +46,7 @@ import {
   chipCountsToJsonObject,
   type ChipDenomination,
 } from "@/lib/chip-denominations";
+import { computeHostAutoBalanceCashouts } from "@/lib/auto-balance-cashout-chips";
 import { getSupabaseRpcErrorMessage } from "@/lib/supabase-error-message";
 import { cn } from "@/lib/utils";
 import {
@@ -144,10 +146,14 @@ export default function MatchDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [validatingMatch, setValidatingMatch] = useState(false);
+  const [autoBalancing, setAutoBalancing] = useState(false);
   const [reopeningAll, setReopeningAll] = useState(false);
   const [unlockingPlayerId, setUnlockingPlayerId] = useState<string | null>(null);
   const [paidTogglingPlayerId, setPaidTogglingPlayerId] = useState<string | null>(null);
   const [finalizingMatch, setFinalizingMatch] = useState(false);
+
+  const [hostPixInput, setHostPixInput] = useState("");
+  const [savingHostPix, setSavingHostPix] = useState(false);
 
   const [savingMap, setSavingMap] = useState<Record<string, boolean>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string | null>>({});
@@ -358,6 +364,11 @@ export default function MatchDetailsPage() {
 
     fetchPage();
   }, [session, matchId]);
+
+  useEffect(() => {
+    if (!match) return;
+    setHostPixInput(match.host_pix_key?.trim() ?? "");
+  }, [match?.match_id, match?.host_pix_key]);
 
   async function applyChipCashOut(
     playerId: string,
@@ -631,7 +642,7 @@ export default function MatchDetailsPage() {
 
   async function handleHostValidateTotals() {
     if (!match || !session) return;
-    if (session.playerId !== match.created_by_player_id) return;
+    if (!session.isAdmin && session.playerId !== match.created_by_player_id) return;
 
     try {
       setValidatingMatch(true);
@@ -675,9 +686,90 @@ export default function MatchDetailsPage() {
     }
   }
 
+  async function handleHostAutoBalanceCashouts() {
+    if (!match || !session) return;
+    if (!session.isAdmin && session.playerId !== match.created_by_player_id) return;
+
+    const confirmMsg =
+      "Reajustar automaticamente cash-out e fichas para fechar o total da mesa com os buy-ins?\n\n" +
+      "• Se o cash-out total for maior que os buy-ins: desconto proporcional entre quem tem repasse (quem tem mais valor em fichas arca mais), em passos de 5 centavos.\n" +
+      "• Se faltar cash-out: aumento distribuído priorizando quem tem menos fichas.\n" +
+      "• Jogadores sem repasse (cash-out zero) ficam de fora.\n\n" +
+      "As combinações de fichas serão recompostas com as denominações da mesa. Deseja continuar?";
+
+    if (typeof window !== "undefined" && !window.confirm(confirmMsg)) return;
+
+    try {
+      setAutoBalancing(true);
+      setPageError(null);
+
+      const { data: freshSummary, error: freshErr } = await supabase
+        .from("v_match_summary")
+        .select("status")
+        .eq("match_id", match.match_id)
+        .eq("group_id", session.groupId)
+        .maybeSingle();
+
+      if (freshErr) throw freshErr;
+
+      const liveStatus = freshSummary?.status;
+      if (liveStatus !== "in_review" && liveStatus !== "in_adjustment") {
+        setPageError(
+          `Só é possível reajustar em «Em análise» ou «Em ajuste». Estado atual: «${labelMatchStatus(liveStatus)}».`
+        );
+        await loadData(session);
+        return;
+      }
+
+      if (!entries.every((e) => e.submittedForReview)) {
+        setPageError("Todos precisam ter enviado para análise antes do reajuste automático.");
+        return;
+      }
+
+      const inputs = entries.map((e) => ({
+        playerId: e.playerId,
+        buyIn: toNumber(e.buyIn),
+        cashOut: toNumber(e.cashOut),
+        chipCounts: e.cashOutChipCounts,
+      }));
+
+      const plan = computeHostAutoBalanceCashouts(inputs);
+      if (!plan) {
+        setPageError("Buy-ins e cash-outs já fecham; não há o que reajustar.");
+        await loadData(session);
+        return;
+      }
+
+      const payload = plan.updates.map((u) => ({
+        player_id: u.playerId,
+        cash_out: u.cashOut,
+        chip_counts: u.chipCountsJson,
+      }));
+
+      const { error } = await supabase.rpc("apply_host_auto_balance_cashouts", {
+        p_match_id: match.match_id,
+        p_actor_player_id: session.playerId,
+        p_updates: payload,
+      });
+
+      if (error) throw error;
+
+      await loadData(session);
+    } catch (err) {
+      setPageError(
+        getSupabaseRpcErrorMessage(
+          err,
+          "Erro ao reajustar cash-outs automaticamente."
+        )
+      );
+    } finally {
+      setAutoBalancing(false);
+    }
+  }
+
   async function handleHostReopenAllAnalyses() {
     if (!match || !session) return;
-    if (session.playerId !== match.created_by_player_id) return;
+    if (!session.isAdmin && session.playerId !== match.created_by_player_id) return;
 
     try {
       setReopeningAll(true);
@@ -702,7 +794,7 @@ export default function MatchDetailsPage() {
 
   async function handleHostUnlockPlayer(targetPlayerId: string) {
     if (!match || !session) return;
-    if (session.playerId !== match.created_by_player_id) return;
+    if (!session.isAdmin && session.playerId !== match.created_by_player_id) return;
 
     try {
       setUnlockingPlayerId(targetPlayerId);
@@ -728,7 +820,7 @@ export default function MatchDetailsPage() {
 
   async function handleHostSetPlayerPaid(targetPlayerId: string, paid: boolean) {
     if (!match || !session) return;
-    if (session.playerId !== match.created_by_player_id) return;
+    if (!session.isAdmin && session.playerId !== match.created_by_player_id) return;
 
     try {
       setPaidTogglingPlayerId(targetPlayerId);
@@ -781,7 +873,7 @@ export default function MatchDetailsPage() {
 
   async function handleFinalizeMatch() {
     if (!match || !session) return;
-    if (session.playerId !== match.created_by_player_id) return;
+    if (!session.isAdmin && session.playerId !== match.created_by_player_id) return;
 
     try {
       setFinalizingMatch(true);
@@ -804,6 +896,32 @@ export default function MatchDetailsPage() {
     }
   }
 
+  async function handleSaveHostPix() {
+    if (!match || !session) return;
+    if (!session.isAdmin && session.playerId !== match.created_by_player_id) return;
+
+    try {
+      setSavingHostPix(true);
+      setPageError(null);
+
+      const { error } = await supabase.rpc("update_match_host_pix", {
+        p_match_id: match.match_id,
+        p_actor_player_id: session.playerId,
+        p_host_pix_key: hostPixInput.trim(),
+      });
+
+      if (error) throw error;
+
+      await loadData(session);
+    } catch (err) {
+      setPageError(
+        getSupabaseRpcErrorMessage(err, "Erro ao salvar o PIX do organizador.")
+      );
+    } finally {
+      setSavingHostPix(false);
+    }
+  }
+
   const currentUserIsParticipant = entries.some(
     (entry) => entry.playerId === session?.playerId
   );
@@ -822,9 +940,13 @@ export default function MatchDetailsPage() {
     matchStatus !== "in_payment" &&
     matchStatus !== "closed";
 
-  const isHost = Boolean(
-    session && match && session.playerId === match.created_by_player_id
-  );
+  const canActAsMatchHost =
+    !!session &&
+    !!match &&
+    (session.isAdmin || session.playerId === match.created_by_player_id);
+
+  const showHostPixEditor =
+    canActAsMatchHost && matchStatus !== null && matchStatus !== "closed";
 
   const entriesWithViewerFirst = useMemo(() => {
     const pid = session?.playerId;
@@ -852,6 +974,7 @@ export default function MatchDetailsPage() {
   const totalBuyIn = entries.reduce((sum, entry) => sum + toNumber(entry.buyIn), 0);
   const totalCashOut = entries.reduce((sum, entry) => sum + toNumber(entry.cashOut), 0);
   const totalProfit = totalCashOut - totalBuyIn;
+  const cashTotalsImbalanced = Math.abs(totalBuyIn - totalCashOut) > 0.02;
 
   const addBuyInEntry = useMemo(() => {
     if (!addBuyInModal) return null;
@@ -1022,6 +1145,47 @@ export default function MatchDetailsPage() {
                     )}
                   </Button>
                 </div>
+                {showHostPixEditor && (
+                  <div className="mt-3 space-y-2 rounded-xl border border-border/60 bg-background/50 px-3 py-3">
+                    <p className="text-[11px] leading-snug text-muted-foreground">
+                      {session?.isAdmin &&
+                      session.playerId !== match?.created_by_player_id
+                        ? "Como admin do grupo, você pode corrigir o PIX exibido a todos."
+                        : "Altere a chave de recebimento enquanto a partida estiver aberta."}
+                    </p>
+                    <div className="relative">
+                      <Wallet className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <input
+                        id="hostPixEditMobile"
+                        type="text"
+                        value={hostPixInput}
+                        onChange={(e) => setHostPixInput(e.target.value)}
+                        placeholder="E-mail, telefone, CPF/CNPJ..."
+                        autoComplete="off"
+                        className="h-11 w-full rounded-xl border border-input bg-background/70 pl-10 pr-3 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-9 w-full rounded-full text-xs font-semibold"
+                      onClick={() => void handleSaveHostPix()}
+                      disabled={savingHostPix}
+                    >
+                      {savingHostPix ? (
+                        <>
+                          <Loader2 className="mr-2 size-3.5 animate-spin" />
+                          Salvando...
+                        </>
+                      ) : (
+                        <>
+                          <KeyRound className="mr-2 size-3.5" />
+                          Salvar PIX
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
               </div>
 
               <Card className="hidden overflow-hidden rounded-2xl border border-secondary/30 bg-gradient-to-b from-secondary/[0.12] to-card/95 shadow-xl shadow-black/15 ring-1 ring-secondary/20 sm:block sm:rounded-[2rem]">
@@ -1069,16 +1233,96 @@ export default function MatchDetailsPage() {
                       </Button>
                     </div>
                   </div>
+                  {showHostPixEditor && (
+                    <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
+                      <p className="text-xs leading-relaxed text-muted-foreground sm:text-sm">
+                        {session?.isAdmin &&
+                        session.playerId !== match?.created_by_player_id
+                          ? "Como admin do grupo, você pode definir ou corrigir o PIX exibido a todos nesta partida."
+                          : "Você pode alterar a chave de recebimento dos buy-ins enquanto a partida não estiver encerrada."}
+                      </p>
+                      <div className="relative">
+                        <Wallet className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                          id="hostPixEditDesktop"
+                          type="text"
+                          value={hostPixInput}
+                          onChange={(e) => setHostPixInput(e.target.value)}
+                          placeholder="E-mail, telefone, CPF/CNPJ ou chave aleatória"
+                          autoComplete="off"
+                          className="h-12 w-full rounded-2xl border border-input bg-background/70 pl-11 pr-4 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30 sm:h-14 sm:text-base"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        className="rounded-full font-semibold"
+                        onClick={() => void handleSaveHostPix()}
+                        disabled={savingHostPix}
+                      >
+                        {savingHostPix ? (
+                          <>
+                            <Loader2 className="mr-2 size-4 animate-spin" />
+                            Salvando...
+                          </>
+                        ) : (
+                          <>
+                            <KeyRound className="mr-2 size-4" />
+                            Salvar PIX do organizador
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </>
           ) : (
             <Card className="overflow-hidden rounded-2xl border border-secondary/30 bg-gradient-to-b from-secondary/[0.12] to-card/95 shadow-xl shadow-black/15 ring-1 ring-secondary/20 sm:rounded-[2rem]">
-              <CardContent className="px-4 py-6 sm:px-6">
+              <CardContent className="space-y-4 px-4 py-6 sm:px-6">
                 <p className="text-center text-sm text-muted-foreground">
                   O organizador não cadastrou um PIX nesta partida (partidas antigas ou
                   rascunho).
                 </p>
+                {showHostPixEditor && (
+                  <div className="space-y-3 border-t border-border/50 pt-4">
+                    <p className="text-xs leading-relaxed text-muted-foreground sm:text-sm">
+                      {session?.isAdmin &&
+                      session.playerId !== match?.created_by_player_id
+                        ? "Como admin, cadastre a chave PIX que os jogadores devem usar nesta partida."
+                        : "Cadastre a chave PIX de recebimento dos buy-ins."}
+                    </p>
+                    <div className="relative">
+                      <Wallet className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <input
+                        id="hostPixEditEmpty"
+                        type="text"
+                        value={hostPixInput}
+                        onChange={(e) => setHostPixInput(e.target.value)}
+                        placeholder="E-mail, telefone, CPF/CNPJ ou chave aleatória"
+                        autoComplete="off"
+                        className="h-12 w-full rounded-2xl border border-input bg-background/70 pl-11 pr-4 text-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/30 sm:h-14 sm:text-base"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      className="w-full rounded-full font-semibold sm:w-auto"
+                      onClick={() => void handleSaveHostPix()}
+                      disabled={savingHostPix}
+                    >
+                      {savingHostPix ? (
+                        <>
+                          <Loader2 className="mr-2 size-4 animate-spin" />
+                          Salvando...
+                        </>
+                      ) : (
+                        <>
+                          <KeyRound className="mr-2 size-4" />
+                          Salvar PIX
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -1121,7 +1365,7 @@ export default function MatchDetailsPage() {
               )}
             </div>
 
-            {isHost && (
+            {canActAsMatchHost && (
               <div className="flex w-full flex-col gap-2 sm:w-auto sm:max-w-full sm:flex-row sm:flex-wrap sm:justify-end">
                 {(matchStatus === "in_review" ||
                   matchStatus === "in_adjustment") &&
@@ -1129,7 +1373,7 @@ export default function MatchDetailsPage() {
                     <Button
                       type="button"
                       onClick={() => void handleHostValidateTotals()}
-                      disabled={validatingMatch}
+                      disabled={validatingMatch || autoBalancing}
                       className="h-10 w-full shrink-0 rounded-full text-sm sm:h-9 sm:w-auto"
                     >
                       {validatingMatch ? (
@@ -1142,6 +1386,32 @@ export default function MatchDetailsPage() {
                           <Scale className="mr-2 size-4 shrink-0" aria-hidden />
                           <span className="sm:hidden">Validar</span>
                           <span className="hidden sm:inline">Validar valores</span>
+                        </>
+                      )}
+                    </Button>
+                  )}
+
+                {(matchStatus === "in_review" ||
+                  matchStatus === "in_adjustment") &&
+                  allEntriesSubmitted &&
+                  cashTotalsImbalanced && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => void handleHostAutoBalanceCashouts()}
+                      disabled={autoBalancing || validatingMatch}
+                      className="h-10 w-full shrink-0 rounded-full text-sm sm:h-9 sm:w-auto"
+                    >
+                      {autoBalancing ? (
+                        <>
+                          <Loader2 className="mr-2 size-4 animate-spin" />
+                          Reajustando...
+                        </>
+                      ) : (
+                        <>
+                          <ArrowDownUp className="mr-2 size-4 shrink-0" aria-hidden />
+                          <span className="sm:hidden">Auto fichas</span>
+                          <span className="hidden sm:inline">Reajustar fichas (auto)</span>
                         </>
                       )}
                     </Button>
@@ -1357,7 +1627,7 @@ export default function MatchDetailsPage() {
                           </div>
                         )}
 
-                        {isHost &&
+                        {canActAsMatchHost &&
                           (matchStatus === "in_adjustment" ||
                             matchStatus === "in_payment") && (
                             <div className="flex flex-wrap items-center gap-2 max-sm:border-t max-sm:border-border/40 max-sm:pt-2">
