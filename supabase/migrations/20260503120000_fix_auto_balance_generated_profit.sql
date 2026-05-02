@@ -1,5 +1,5 @@
--- Ajuste automático de cash-out/fichas para fechar totais com buy-in (validação host/admin).
--- O cliente calcula proporções; o servidor confere totais, fichas e elegibilidade.
+-- profit é coluna gerada: não pode ser atualizada manualmente.
+-- Reajuste automático só em «in_adjustment» (após validação que não fechou).
 
 CREATE OR REPLACE FUNCTION public.apply_host_auto_balance_cashouts(
   p_match_id uuid,
@@ -166,7 +166,3 @@ BEGIN
   END LOOP;
 END;
 $function$;
-
-GRANT EXECUTE ON FUNCTION public.apply_host_auto_balance_cashouts(uuid, uuid, jsonb) TO anon;
-GRANT EXECUTE ON FUNCTION public.apply_host_auto_balance_cashouts(uuid, uuid, jsonb) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.apply_host_auto_balance_cashouts(uuid, uuid, jsonb) TO service_role;

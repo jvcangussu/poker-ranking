@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
+  AlertTriangle,
   ArrowDownUp,
   ArrowLeft,
   BadgeCheck,
@@ -147,6 +148,7 @@ export default function MatchDetailsPage() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [validatingMatch, setValidatingMatch] = useState(false);
   const [autoBalancing, setAutoBalancing] = useState(false);
+  const [autoBalanceModalOpen, setAutoBalanceModalOpen] = useState(false);
   const [reopeningAll, setReopeningAll] = useState(false);
   const [unlockingPlayerId, setUnlockingPlayerId] = useState<string | null>(null);
   const [paidTogglingPlayerId, setPaidTogglingPlayerId] = useState<string | null>(null);
@@ -686,18 +688,9 @@ export default function MatchDetailsPage() {
     }
   }
 
-  async function handleHostAutoBalanceCashouts() {
+  async function runHostAutoBalanceCashouts() {
     if (!match || !session) return;
     if (!session.isAdmin && session.playerId !== match.created_by_player_id) return;
-
-    const confirmMsg =
-      "Reajustar automaticamente cash-out e fichas para fechar o total da mesa com os buy-ins?\n\n" +
-      "• Se o cash-out total for maior que os buy-ins: desconto proporcional entre quem tem repasse (quem tem mais valor em fichas arca mais), em passos de 5 centavos.\n" +
-      "• Se faltar cash-out: aumento distribuído priorizando quem tem menos fichas.\n" +
-      "• Jogadores sem repasse (cash-out zero) ficam de fora.\n\n" +
-      "As combinações de fichas serão recompostas com as denominações da mesa. Deseja continuar?";
-
-    if (typeof window !== "undefined" && !window.confirm(confirmMsg)) return;
 
     try {
       setAutoBalancing(true);
@@ -713,16 +706,19 @@ export default function MatchDetailsPage() {
       if (freshErr) throw freshErr;
 
       const liveStatus = freshSummary?.status;
-      if (liveStatus !== "in_review" && liveStatus !== "in_adjustment") {
+      if (liveStatus !== "in_adjustment") {
         setPageError(
-          `Só é possível reajustar em «Em análise» ou «Em ajuste». Estado atual: «${labelMatchStatus(liveStatus)}».`
+          `O reajuste automático só está disponível em «Em ajuste». Estado atual: «${labelMatchStatus(liveStatus)}».`
         );
+        setAutoBalanceModalOpen(false);
         await loadData(session);
         return;
       }
 
       if (!entries.every((e) => e.submittedForReview)) {
-        setPageError("Todos precisam ter enviado para análise antes do reajuste automático.");
+        setPageError(
+          "Todos precisam ter enviado para análise antes do reajuste automático."
+        );
         return;
       }
 
@@ -736,6 +732,7 @@ export default function MatchDetailsPage() {
       const plan = computeHostAutoBalanceCashouts(inputs);
       if (!plan) {
         setPageError("Buy-ins e cash-outs já fecham; não há o que reajustar.");
+        setAutoBalanceModalOpen(false);
         await loadData(session);
         return;
       }
@@ -754,6 +751,7 @@ export default function MatchDetailsPage() {
 
       if (error) throw error;
 
+      setAutoBalanceModalOpen(false);
       await loadData(session);
     } catch (err) {
       setPageError(
@@ -1391,16 +1389,15 @@ export default function MatchDetailsPage() {
                     </Button>
                   )}
 
-                {(matchStatus === "in_review" ||
-                  matchStatus === "in_adjustment") &&
+                {matchStatus === "in_adjustment" &&
                   allEntriesSubmitted &&
                   cashTotalsImbalanced && (
                     <Button
                       type="button"
                       variant="secondary"
-                      onClick={() => void handleHostAutoBalanceCashouts()}
+                      onClick={() => setAutoBalanceModalOpen(true)}
                       disabled={autoBalancing || validatingMatch}
-                      className="h-10 w-full shrink-0 rounded-full text-sm sm:h-9 sm:w-auto"
+                      className="h-10 w-full shrink-0 rounded-full border-amber-500/35 bg-amber-500/12 text-amber-100 hover:bg-amber-500/20 hover:text-amber-50 sm:h-9 sm:w-auto"
                     >
                       {autoBalancing ? (
                         <>
@@ -2207,6 +2204,84 @@ export default function MatchDetailsPage() {
                 </>
               ) : (
                 "Confirmar e entrar"
+              )}
+            </Button>
+          </div>
+        </div>
+      </MobileModal>
+
+      <MobileModal
+        open={autoBalanceModalOpen}
+        onClose={() => {
+          if (!autoBalancing) setAutoBalanceModalOpen(false);
+        }}
+        title="Reajustar fichas automaticamente?"
+        description="Fechamos buy-ins e cash-outs em passos de 5 centavos (denominações da mesa)."
+        className="border-amber-500/35 bg-gradient-to-b from-amber-950/40 via-card to-card shadow-amber-950/20 ring-1 ring-amber-500/25 sm:max-w-md"
+      >
+        <div className="space-y-4">
+          <div className="flex gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+            <AlertTriangle
+              className="mt-0.5 size-5 shrink-0 text-amber-400"
+              aria-hidden
+            />
+            <p className="text-sm leading-relaxed text-amber-100/90">
+              A partida está <span className="font-semibold text-amber-50">em ajuste</span>{" "}
+              porque os totais não fecharam na validação. Esta ação altera cash-out e a
+              combinação de fichas só de quem tem repasse (cash-out {">"} 0).
+            </p>
+          </div>
+
+          <ul className="list-none space-y-2.5 text-sm text-muted-foreground">
+            <li className="flex gap-2">
+              <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-secondary" />
+              <span>
+                Se o <strong className="text-foreground">cash-out total for maior</strong>{" "}
+                que os buy-ins: desconto proporcional a quem tem mais valor em fichas.
+              </span>
+            </li>
+            <li className="flex gap-2">
+              <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-secondary" />
+              <span>
+                Se <strong className="text-foreground">faltar cash-out</strong>: aumento
+                distribuído priorizando quem tem menos fichas.
+              </span>
+            </li>
+            <li className="flex gap-2">
+              <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-secondary" />
+              <span>
+                As fichas são <strong className="text-foreground">recompostas</strong>{" "}
+                com o algoritmo padrão da mesa (não preserva a pilha física exata).
+              </span>
+            </li>
+          </ul>
+
+          <div className="flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 rounded-full border-border/80"
+              disabled={autoBalancing}
+              onClick={() => setAutoBalanceModalOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              className="h-12 rounded-full bg-amber-600 text-white shadow-md shadow-amber-950/40 hover:bg-amber-500 hover:text-white"
+              disabled={autoBalancing}
+              onClick={() => void runHostAutoBalanceCashouts()}
+            >
+              {autoBalancing ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Aplicando...
+                </>
+              ) : (
+                <>
+                  <ArrowDownUp className="mr-2 size-4" />
+                  Confirmar reajuste
+                </>
               )}
             </Button>
           </div>
